@@ -1,0 +1,68 @@
+/* src/App.css */
+.App {
+  font-family: sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  background-color: #f4f4f4;
+  min-height: 100vh;
+}
+
+.App-header {
+  background-color: #282c34;
+  color: white;
+  padding: 20px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+main {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  width: 80%;
+  max-width: 960px;
+}
+
+h2 {
+  color: #333;
+  margin-top: 0;
+  margin-bottom: 15px;
+  border-bottom: 2px solid #eee;
+  padding-bottom: 10px;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+li {
+  margin-bottom: 15px;
+  padding: 15px;
+  border-radius: 6px;
+}
+
+li strong {
+  font-weight: bold;
+  color: #007bff; /* Un color azul para resaltar el rol */
+  margin-right: 5px;
+}
+
+li small {
+  color: #777;
+  display: block;
+  margin-top: 5px;
+  font-size: 0.9em;
+}
+
+li:nth-child(odd) {
+  background-color: #f9f9f9; /* Un fondo ligeramente gris para filas impares */
+}
+
+li:nth-child(even) {
+  background-color: #e9ecef; /* Un fondo ligeramente más oscuro para filas pares */
+}
