@@ -1,174 +1,144 @@
 // src/supabaseClient.js
 import { createClient } from '@supabase/supabase-js';
 
+// 1. Cargar las variables de entorno
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+const N8N_WEBHOOK_URL = process.env.REACT_APP_N8N_AGENT_WEBHOOK_URL;
 
+// 2. Verificar que las variables se cargaron (¡Importante!)
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(
-    "Error Crítico: Supabase URL o Anon Key no están definidas. " +
-    "Verifica tus variables de entorno (.env) y reinicia el servidor de desarrollo."
-  );
+  console.error("¡ERROR CRÍTICO! Las variables de entorno de Supabase (REACT_APP_SUPABASE_URL o REACT_APP_SUPABASE_ANON_KEY) no están definidas.");
+  console.error("Asegúrate de que tu archivo .env está en la raíz del proyecto y has reiniciado el servidor de desarrollo (npm start).");
 }
 
+// 3. Crear y exportar el cliente Supabase
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-if (supabaseUrl) {
-    const urlParts = supabaseUrl.split('.');
-    const projectRef = urlParts.length > 1 ? urlParts[0].split('//')[1] : "URL_incompleta";
-    console.log(`[SupabaseClient] Initialized for Supabase project ref: ${projectRef}`);
-}
+// --- FUNCIONES EXISTENTES ---
 
-/**
- * Obtiene el historial de chat.
- * Si no se especifica sessionIdToFilterBy, trae los 'initialLoadLimit' mensajes más recientes globalmente.
- * Si se especifica sessionIdToFilterBy, trae todos los mensajes de esa sesión.
- * @param {string} [sessionIdToFilterBy] - Opcional. Filtra mensajes por este ID de sesión.
- * @param {number} [initialLoadLimit=50] - Número de mensajes más recientes a cargar inicialmente si no se filtra por sesión.
- * @returns {Promise<Array>} Interacciones o array vacío en caso de error.
- */
-export async function getChatHistory(sessionIdToFilterBy, initialLoadLimit = 50) {
-  if (!supabase.auth) {
-    console.error("[SupabaseClient] getChatHistory - Supabase client no inicializado.");
-    return [];
-  }
-
-  let query;
-
-  if (sessionIdToFilterBy) {
-    console.log(`[SupabaseClient] getChatHistory: Fetching all messages for session ${sessionIdToFilterBy}, ordered chronologically.`);
-    query = supabase
-      .from('n8n_chat_histories')
-      .select('*') // Incluye sent_by_agent
-      .eq('session_id', sessionIdToFilterBy)
-      .order('time', { ascending: true }); // Mensajes más antiguos primero para esta sesión
-  } else {
-    console.log(`[SupabaseClient] getChatHistory: Fetching last ${initialLoadLimit} messages globally, ordered most recent first.`);
-    query = supabase
-      .from('n8n_chat_histories')
-      .select('*') // Incluye sent_by_agent
-      .order('time', { ascending: false }) // Mensajes más recientes primero globalmente
-      .limit(initialLoadLimit);
-  }
-
+export async function getChatHistory(sessionId = null, limit = 150) { // Aumentado a 150 por si acaso
   try {
+    let query = supabase
+      .from('n8n_chat_histories')
+      .select('*')
+      .order('time', { ascending: false })
+      .limit(limit);
+
+    if (sessionId) {
+      query = query.eq('session_id', sessionId);
+    }
     const { data, error } = await query;
-    if (error) {
-      console.error('[SupabaseClient] Error en getChatHistory:', error);
-      return [];
-    }
-    // Si la carga global fue descending, la invertimos aquí para que en React siempre se manejen ascending
-    // antes de agrupar, para consistencia dentro de las sesiones.
-    const finalData = (data && !sessionIdToFilterBy) ? data.reverse() : (data || []);
-    console.log('[SupabaseClient] Data fetched by getChatHistory (count):', finalData.length);
-    return finalData;
-  } catch (err) {
-    console.error('[SupabaseClient] Excepción en getChatHistory:', err);
-    return [];
-  }
-}
-
-// --- sendAgentMessageViaN8N, getSessionStatus, updateSessionStatus ---
-// (Estas funciones se mantienen igual que en la última versión completa que te proporcioné,
-//  asegúrate de tener la versión que incluye el manejo de `agentId` y la llamada al webhook.)
-
-export async function sendAgentMessageViaN8N({ sessionId, messageContent, agentId = null }) {
-  if (!supabase.auth) {
-    console.error("[SupabaseClient] sendAgentMessageViaN8N - Supabase client no inicializado.");
-    return { success: false, errorType: 'config', details: 'Supabase client no inicializado' };
-  }
-  console.log(`[SupabaseClient] Attempting to send agent message. Session: ${sessionId}, Message: ${messageContent}, AgentID: ${agentId}`);
-
-  const agentMessageJsonForSupabase = {
-    type: 'ai', // Mensajes de agente se guardan con type 'ai' para la memoria del bot
-    content: messageContent,
-  };
-
-  // 1. Guardar mensaje del agente en Supabase
-  const { data: supabaseInsertData, error: supabaseInsertError } = await supabase
-    .from('n8n_chat_histories')
-    .insert([{
-      session_id: sessionId,
-      message: agentMessageJsonForSupabase,
-      sent_by_agent: true,
-    }])
-    .select()
-    .single();
-
-  if (supabaseInsertError) {
-    console.error('[SupabaseClient] Error saving agent message to Supabase:', supabaseInsertError);
-    return { success: false, errorType: 'supabase_message_insert', details: supabaseInsertError };
-  }
-  console.log('[SupabaseClient] Agent message saved to Supabase:', supabaseInsertData);
-
-  // 2. Actualizar el estado de la sesión a 'agent_active'
-  const statusUpdateResult = await updateSessionStatus(sessionId, 'agent_active', agentId);
-  if (!statusUpdateResult) {
-    console.warn(`[SupabaseClient] Failed to update session ${sessionId} status to agent_active, but message was processed in Supabase.`);
-  }
-
-  // 3. Llamar al webhook de n8n para enviar a WhatsApp
-  const n8nWebhookUrl = process.env.REACT_APP_N8N_AGENT_WEBHOOK_URL;
-  const placeholderUrl = 'PON_AQUI_TU_URL_DEL_WEBHOOK_DE_N8N_PARA_ENVIAR_WHATSAPP';
-
-  if (!n8nWebhookUrl || n8nWebhookUrl === placeholderUrl || n8nWebhookUrl.trim() === '') {
-    console.warn("[SupabaseClient] N8N Webhook URL no configurada o es placeholder. El mensaje NO se enviará a WhatsApp.");
-    return { success: true, data: supabaseInsertData, warning: 'N8N Webhook URL no configurada o es placeholder' };
-  }
-
-  try {
-    const response = await fetch(n8nWebhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        recipient_whatsapp_id: sessionId,
-        text_message: messageContent,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorDataN8N = await response.json().catch(() => ({ message: "Error desconocido al parsear respuesta de n8n" }));
-      console.error(`[SupabaseClient] Error sending message via n8n to WhatsApp (${response.status}):`, errorDataN8N);
-      return { success: false, errorType: 'n8n_webhook', details: errorDataN8N, savedToSupabase: true, supabaseData: supabaseInsertData };
-    }
-
-    const n8nResponseData = await response.json().catch(() => ({}));
-    console.log('[SupabaseClient] Message sent via n8n to WhatsApp:', n8nResponseData);
-    return { success: true, data: supabaseInsertData };
-
-  } catch (networkError) {
-    console.error('[SupabaseClient] Network error calling n8n webhook:', networkError);
-    return { success: false, errorType: 'network', details: networkError, savedToSupabase: true, supabaseData: supabaseInsertData };
-  }
+    if (error) { console.error('Error fetching chat history:', error); return null; }
+    return data.reverse();
+  } catch (err) { console.error('Unexpected error fetching chat history:', err); return null; }
 }
 
 export async function getSessionStatus(sessionId) {
-  if (!supabase.auth) { return 'bot_active'; }
-  if (!sessionId) { return 'bot_active'; }
-  try {
-    const { data, error } = await supabase
-      .from('chat_sessions_state')
-      .select('status, agent_id')
-      .eq('session_id', sessionId)
-      .maybeSingle();
-    if (error) { console.error('[SupabaseClient] Error obteniendo estado de sesión para', sessionId, ':', error); return 'bot_active'; }
-    return data ? data.status : 'bot_active';
-  } catch (err) { console.error('[SupabaseClient] Excepción en getSessionStatus para', sessionId, ':', err); return 'bot_active'; }
+    try {
+        const { data, error } = await supabase
+            .from('chat_sessions_state')
+            .select('status')
+            .eq('session_id', sessionId)
+            .single();
+        if (error && error.code !== 'PGRST116') { console.error(`Error fetching status for ${sessionId}:`, error); return 'bot_active'; }
+        return data?.status || 'bot_active';
+    } catch (err) { console.error(`Unexpected error fetching status for ${sessionId}:`, err); return 'bot_active'; }
 }
 
 export async function updateSessionStatus(sessionId, newStatus, agentId = null) {
-  if (!supabase.auth) { return null; }
-  if (!sessionId) { console.error('[SupabaseClient] updateSessionStatus: sessionId es undefined.'); return null; }
-  const updatePayload = { session_id: sessionId, status: newStatus, last_updated: new Date().toISOString() };
-  if (agentId && typeof agentId === 'string') { updatePayload.agent_id = agentId; }
-  else if (agentId) { console.warn(`[SupabaseClient] updateSessionStatus: agentId para sesión ${sessionId} no es string válido. Valor:`, agentId); }
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('chat_sessions_state')
-      .upsert(updatePayload, { onConflict: 'session_id' })
-      .select().single();
-    if (error) { console.error(`[SupabaseClient] Error actualizando estado de sesión ${sessionId} a ${newStatus}:`, error); return null; }
-    console.log(`[SupabaseClient] Sesión ${sessionId} actualizada a ${newStatus} (Agente: ${agentId || 'N/A'})`);
-    return data;
-  } catch (err) { console.error(`[SupabaseClient] Excepción en updateSessionStatus para ${sessionId}:`, err); return null; }
+      .upsert({
+          session_id: sessionId,
+          status: newStatus,
+          last_updated: new Date().toISOString(),
+          agent_id: agentId,
+      }, { onConflict: 'session_id' });
+    if (error) { console.error('Error al actualizar estado de sesión:', error); return false; }
+    return true;
+  } catch (error) { console.error('Error inesperado en updateSessionStatus:', error); return false; }
 }
+
+export async function sendAgentMessageViaN8N({ sessionId, messageContent, agentId }) {
+    if (!N8N_WEBHOOK_URL || !N8N_WEBHOOK_URL.startsWith('http')) {
+        console.error("[SupabaseClient] N8N_WEBHOOK_URL no está configurada correctamente en .env.");
+        return { success: false, errorType: "config", details: "Webhook URL no configurada." };
+    }
+    try {
+        const { data: savedMessage, error: saveError } = await supabase
+            .from('n8n_chat_histories')
+            .insert({
+                session_id: sessionId,
+                message: { type: 'ai', content: messageContent },
+                time: new Date().toISOString(),
+                sent_by_agent: true,
+                agent_id: agentId
+            })
+            .select().single();
+        if (saveError) { console.error('Error al guardar mensaje de agente:', saveError); return { success: false, details: saveError }; }
+
+        const response = await fetch(N8N_WEBHOOK_URL, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: sessionId, message: messageContent }),
+        });
+        if (!response.ok) { console.error('Error n8n webhook:', response.statusText); return { success: false, details: `n8n respondió con ${response.status}` }; }
+        return { success: true, messageId: savedMessage.id };
+    } catch (error) { console.error('Error sendAgentMessageViaN8N:', error); return { success: false, details: error }; }
+}
+
+export async function blockSession(sessionId, agentId = null) {
+  try {
+    const { error: insertError } = await supabase.from('blocked_users').insert({ session_id: sessionId, blocked_by_agent_id: agentId });
+    if (insertError && insertError.code !== '23505') { console.error('Error al insertar en blocked_users:', insertError); return false; }
+    return await updateSessionStatus(sessionId, 'blocked', agentId);
+  } catch (error) { console.error('Error en blockSession:', error); return false; }
+}
+
+export async function unblockSession(sessionId) {
+  try {
+    const { error: deleteError } = await supabase.from('blocked_users').delete().eq('session_id', sessionId);
+    if (deleteError) { console.error('Error al eliminar de blocked_users:', deleteError); return false; }
+    return await updateSessionStatus(sessionId, 'bot_active', null);
+  } catch (error) { console.error('Error en unblockSession:', error); return false; }
+}
+
+// --- NUEVA FUNCIÓN ---
+/**
+ * Guarda un par de Pregunta/Respuesta en la base de conocimiento.
+ * @param {string} question - La pregunta del usuario.
+ * @param {string} answer - La respuesta del agente.
+ * @param {string} agentId - El ID del agente que guarda.
+ * @param {number | null} messageId - ID del mensaje original.
+ * @param {string | null} sessionId - ID de la sesión original.
+ * @returns {Promise<boolean>} - True si tuvo éxito, false si no.
+ */
+export async function saveToKnowledgeBase(question, answer, agentId, messageId = null, sessionId = null) {
+  try {
+    console.log(`[SupabaseClient] Guardando en KB: P='${question.substring(0, 20)}...' A='${answer.substring(0, 20)}...'`);
+
+    const { error } = await supabase
+      .from('knowledge_base')
+      .insert({
+        question: question,
+        answer: answer,
+        created_by_agent_id: agentId,
+        source_message_id: messageId,
+        source_session_id: sessionId,
+      });
+
+    if (error) {
+      console.error('Error al guardar en knowledge_base:', error);
+      return false;
+    }
+
+    console.log('[SupabaseClient] Q&A guardada exitosamente.');
+    return true;
+
+  } catch (error) {
+    console.error('Error inesperado en saveToKnowledgeBase:', error);
+    return false;
+  }
+}
+// --- FIN NUEVA FUNCIÓN ---
