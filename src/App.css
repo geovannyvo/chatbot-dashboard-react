@@ -1,5 +1,9 @@
 /* src/App.css */
 
+*, *::before, *::after { /* <<< AÑADIDO ESTO AL PRINCIPIO DE TODO */
+  box-sizing: border-box;
+}
+
 /* --- Variables de Color (Tema Oscuro WhatsApp) --- */
 :root {
   --wa-dark-bg-main: #111b21;
@@ -17,9 +21,16 @@
   --wa-dark-grey: #757575;
   --wa-dark-button-red: #d9534f;
   --wa-dark-button-green: #5cb85c;
-  --wa-dark-button-yellow: #f0ad4e;
+  --wa-dark-button-yellow: #f0ad4e; /* Usado para botones de "Atender" y borde de advertencia needs_agent */
   --wa-dark-button-blue: #337ab7;
   --wa-dark-button-send: #00a884;
+
+  /* Nuevas variables para las advertencias */
+  --wa-dark-warning-bg: #5c4b00; 
+  --wa-dark-warning-text: #e9edef; 
+  --wa-dark-offline-bg: #3a4a54; 
+  --wa-dark-offline-icon-bg: #f0ad4e; 
+  --wa-dark-warning-border: #7a5252; 
 }
 
 /* --- Estilos Globales --- */
@@ -30,17 +41,18 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--wa-dark-bg-main); /* Fondo principal oscuro */
-  color: var(--wa-dark-text-primary); /* Texto principal claro */
+  background-color: var(--wa-dark-bg-main); 
+  color: var(--wa-dark-text-primary); 
 }
 
 .App {
-  text-align: center;
+  /* text-align: center; */ /* Puedes quitarlo si no lo necesitas globalmente para .App */
+  /* O ajustarlo según tu estructura general */
 }
 
-/* --- Cabecera --- */
+/* --- Cabecera (si la usas en algún layout) --- */
 .App-header {
-  background-color: var(--wa-dark-bg-sec); /* Fondo secundario */
+  background-color: var(--wa-dark-bg-sec); 
   min-height: 60px;
   display: flex;
   align-items: center;
@@ -58,10 +70,19 @@ body {
 }
 
 /* --- Área Principal --- */
-main {
-  height: calc(100vh - 61px);
-  text-align: left; /* Alinear contenido a la izquierda */
-}
+/* MODIFICADO: Comentada la regla global de 'main' para evitar conflictos con el main de DashboardLayout.
+   Si necesitas esta regla para OTRA estructura de página que SÍ tiene un .App-header de 61px, 
+   deberías hacer este selector más específico, por ejemplo:
+   .algun-otro-contenedor-principal > main { 
+     height: calc(100vh - 61px);
+     text-align: left;
+   }
+*/
+/* main {
+  height: calc(100vh - 61px); 
+  text-align: left; 
+} 
+*/
 
 /* --- Barra de Scroll --- */
 ::-webkit-scrollbar {
@@ -74,7 +95,7 @@ main {
 ::-webkit-scrollbar-thumb {
   background-color: var(--wa-dark-text-sec);
   border-radius: 20px;
-  border: 2px solid var(--wa-dark-bg-main);
+  border: 2px solid var(--wa-dark-bg-main); /* Para dar efecto de "flotar" */
 }
 ::-webkit-scrollbar-thumb:hover {
     background-color: var(--wa-dark-hover);
@@ -84,23 +105,23 @@ main {
 button {
   border: none;
   padding: 10px 15px;
-  border-radius: 25px; /* Botones más redondeados */
+  border-radius: 25px; 
   cursor: pointer;
   font-weight: bold;
   transition: filter 0.2s ease, transform 0.1s ease;
-  color: white;
-  background-color: var(--wa-dark-bg-sec); /* Color base */
+  color: white; /* Color de texto por defecto para botones */
+  background-color: var(--wa-dark-bg-sec); /* Un color base, se puede sobreescribir */
 }
 
-button:hover {
-    filter: brightness(1.2); /* Efecto hover general */
+button:hover:not(:disabled) { /* Aplicar solo si no está deshabilitado */
+    filter: brightness(1.2); 
     transform: scale(1.03);
 }
 
 button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-    filter: brightness(0.7);
+    filter: brightness(0.7); /* No aplicar transform a disabled */
     transform: scale(1);
 }
 
@@ -109,11 +130,11 @@ textarea {
     background-color: var(--wa-dark-bg-sec);
     color: var(--wa-dark-text-primary);
     border: 1px solid var(--wa-dark-border);
-    border-radius: 8px;
+    border-radius: 8px; /* Menos redondeado que los botones para diferenciación */
     padding: 10px;
-    font-family: inherit;
-    font-size: 1em;
-    resize: vertical;
+    font-family: inherit; /* Usar la fuente del body */
+    font-size: 1em; /* O el tamaño que prefieras */
+    resize: vertical; /* Permitir solo resize vertical */
 }
 
 textarea::placeholder {
@@ -128,13 +149,17 @@ textarea::placeholder {
 }
 
 /* --- Estilos para iconos SVG --- */
-/* Damos un fill base, pero los colores específicos se darán en línea o con clases */
 svg {
-    fill: var(--wa-dark-text-sec);
+    fill: var(--wa-dark-text-sec); /* Color de relleno base para SVGs */
+    /* Considera añadir vertical-align si los SVGs no se alinean bien con el texto */
+    /* vertical-align: middle; */ 
 }
 
-.BotIconMini svg, .BotIcon svg { fill: var(--wa-dark-blue) !important; }
-.AgentIconMini svg, .AgentIcon svg { fill: var(--wa-dark-orange) !important; }
-.AlertIconMini svg, .AlertIcon svg { fill: var(--wa-dark-alert) !important; animation: pulse 1.5s infinite; }
-.BlockIconMini svg, .BlockIcon svg { fill: var(--wa-dark-grey) !important; }
-.UserIcon svg { fill: var(--wa-dark-blue) !important; }
+/* Clases específicas para cambiar el color de relleno de los iconos SVG */
+.BotIcon svg, .BotIconMini svg { fill: var(--wa-dark-blue) !important; }
+.UserIcon svg, .UserIconMini svg { fill: var(--wa-dark-blue) !important; } /* Asegúrate que UserIcon tenga regla */
+.AgentIcon svg, .AgentIconMini svg { fill: var(--wa-dark-orange) !important; }
+.AlertIcon svg, .AlertIconMini svg { fill: var(--wa-dark-alert) !important; animation: pulse 1.5s infinite; }
+.BlockIcon svg, .BlockIconMini svg { fill: var(--wa-dark-grey) !important; }
+
+/* El color de stroke para NeedsAgentAttentionIcon y NoWifiIcon se maneja inline en el componente SVG, lo cual está bien. */
