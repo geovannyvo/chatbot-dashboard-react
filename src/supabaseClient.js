@@ -7,6 +7,10 @@ const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 const N8N_WEBHOOK_URL_AGENT_SENDS = process.env.REACT_APP_N8N_AGENT_WEBHOOK_URL; // Usado para que el agente envíe mensajes
 
+// --- LÍNEA DE DEPURACIÓN AÑADIDA ---
+console.log("VERIFICANDO URL DE SUPABASE EN USO:", supabaseUrl);
+// --- FIN DE LÍNEA DE DEPURACIÓN ---
+
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error("¡ERROR CRÍTICO! Variables de Supabase no definidas en .env para chatbot-dashboard-react.");
 }
