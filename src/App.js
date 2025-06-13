@@ -122,6 +122,7 @@ function App() {
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
+  // Primer useEffect: Maneja la autenticación y cambios de estado
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: currentSessionFromGet } }) => {
         if (!session) { 
@@ -170,8 +171,9 @@ function App() {
         authListener?.subscription?.unsubscribe();
         document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []); 
+  }, []); // Este useEffect no tiene dependencias externas, está bien así
 
+  // Segundo useEffect: Maneja la carga del perfil cuando cambia la sesión
   useEffect(() => {
     if (session?.user && isLoadingProfile && userProfile === null) {
         getCurrentUserProfile().then(profile => {
@@ -187,7 +189,7 @@ function App() {
     } else if (!session && isLoadingProfile) {
         setIsLoadingProfile(false);
     }
-  }, [session, isLoadingProfile, userProfile]);
+  }, [session, isLoadingProfile, userProfile]); // Incluye las dependencias que usa
 
   const handlePasswordAndFlagUpdated = useCallback(() => {
     setUserProfile(null);

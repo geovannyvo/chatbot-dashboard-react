@@ -35,8 +35,7 @@ const colors = {
 function DashboardPage({ currentUser, chatViewFilter, setChatViewFilter, onCountsChange }) {
     const [groupedInteractions, setGroupedInteractions] = useState({});
     const [sessionStatuses, setSessionStatuses] = useState({});
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    // ELIMINADAS las variables loading y error que no se usaban (líneas 38-39)
     const [selectedSessionId, setSelectedSessionId] = useState(null);
     const [unreadCounts, setUnreadCounts] = useState(() => {
         try { return JSON.parse(localStorage.getItem('unreadCounts')) || {}; } catch (e) { return {}; }
@@ -119,10 +118,9 @@ function DashboardPage({ currentUser, chatViewFilter, setChatViewFilter, onCount
 
     const initialLoad = useCallback(async (isMountedRef) => {
         if (!currentUser || !currentUser.id) {
-            if (isMountedRef.current) setLoading(false);
             return;
         }
-        if (isMountedRef.current) { setError(null); setLoading(true); }
+        
         try {
             const rawHistory = await getChatHistory(null, 200);
             if (!isMountedRef.current) return;
@@ -145,9 +143,6 @@ function DashboardPage({ currentUser, chatViewFilter, setChatViewFilter, onCount
             }
         } catch (err) {
             console.error("[DashboardPage Agente] initialLoad: ERROR CAZADO:", err);
-            if (isMountedRef.current) setError(err.message || "Error cargando datos iniciales.");
-        } finally {
-            if (isMountedRef.current) { setLoading(false); }
         }
     }, [currentUser, processInteractions]);
 
@@ -155,8 +150,6 @@ function DashboardPage({ currentUser, chatViewFilter, setChatViewFilter, onCount
         const isMountedRef = { current: true };
         if (currentUser && currentUser.id) {
             initialLoad(isMountedRef);
-        } else {
-            setLoading(false);
         }
         return () => { isMountedRef.current = false; };
     }, [currentUser, initialLoad]);
@@ -226,7 +219,7 @@ function DashboardPage({ currentUser, chatViewFilter, setChatViewFilter, onCount
                 supabase.removeChannel(statusSubscription).catch(err => console.error("Error al remover canal estado:", err));
             }
         };
-    }, [currentUser, supabase, formatInteractionData, processInteractions]);
+    }, [currentUser, formatInteractionData, processInteractions]); // REMOVIDO 'supabase' de las dependencias (línea 229)
 
     const handleToggleContextMenu = useCallback((sessionId, event) => {
         if (event) event.stopPropagation();
