@@ -12,7 +12,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { ToastContainer,toast } from 'react-toastify';
 
 // --- Iconos ---
-const ChatsIcon = () => <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>;
+const ChatsIcon = () => <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2zM-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>;
 const ArchiveIcon = () => <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z"/></svg>;
 const NeedsAttentionIcon = () => <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 15c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1s1 .45 1 1v4c0 .55-.45 1-1 1zm0-8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z" opacity={0.3}/><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>;
 const BlockedIcon = () => <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>;
@@ -122,78 +122,80 @@ function App() {
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
-  // Primer useEffect: Maneja la autenticación y cambios de estado
+  // --- HOOKS DE EFECTO REFACTORIZADOS ---
+
+  // Effect 1: Maneja la sesión de autenticación.
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: currentSessionFromGet } }) => {
-        if (!session) { 
-            setSession(currentSessionFromGet);
-        }
-        setIsLoadingSession(false);
-        if (currentSessionFromGet?.user && !userProfile) {
-            setUserProfile(null);
-            setIsLoadingProfile(true);
-        } else if (!currentSessionFromGet?.user) {
-            setUserProfile(null);
-            setIsLoadingProfile(false);
-        }
-    }).catch(error => {
-        console.error("[App Agente - AuthEffect getSession] Error:", error);
-        setIsLoadingSession(false); setIsLoadingProfile(false);
+    // Obtenemos la sesión actual para evitar un parpadeo en la carga inicial.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsLoadingSession(false);
+      // Si no hay sesión, sabemos que tampoco hay perfil.
+      if (!session) {
+        setIsLoadingProfile(false);
+      }
     });
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-        (_event, currentSessionFromAuth) => {
-            setSession(currentSessionFromAuth);
-            setIsLoadingSession(false);
+    // Nos suscribimos a futuros cambios de estado de la autenticación.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Manejar el caso de recuperación de contraseña explícitamente.
+      if (_event === 'PASSWORD_RECOVERY') {
+        setSession(session);
+        setIsLoadingProfile(false); // No hay perfil que cargar aquí.
+      } else {
+        setSession(session);
+      }
+      setIsLoadingSession(false);
+    });
 
-            if (currentSessionFromAuth?.user) {
-                if (_event === 'PASSWORD_RECOVERY') {
-                    setUserProfile(null); 
-                    setIsLoadingProfile(false); 
-                } else if (_event === 'USER_UPDATED' || _event === 'SIGNED_IN') {
-                    setUserProfile(null);
-                    setIsLoadingProfile(true);
-                }
-            } else { 
-                setUserProfile(null);
-                setIsLoadingProfile(false);
-            }
-        }
-    );
     const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') {
-            supabase.auth.getSession();
-        }
+      if (document.visibilityState === 'visible') {
+        supabase.auth.getSession();
+      }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-        authListener?.subscription?.unsubscribe();
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      subscription?.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []); // Este useEffect no tiene dependencias externas, está bien así
+  }, []);
 
-  // Segundo useEffect: Maneja la carga del perfil cuando cambia la sesión
+  // Effect 2: Maneja la carga del perfil del usuario, reaccionando a los cambios en la sesión.
   useEffect(() => {
-    if (session?.user && isLoadingProfile && userProfile === null) {
-        getCurrentUserProfile().then(profile => {
-            if (isLoadingProfile) { 
-                setUserProfile(profile);
-                setIsLoadingProfile(false);
-            }
-        }).catch(err => {
-            console.error("[App Agente - ProfileEffect] Error cargando perfil:", err);
-            setUserProfile(null);
-            setIsLoadingProfile(false);
+    // Si hay un usuario en la sesión, buscamos su perfil.
+    if (session?.user) {
+      setIsLoadingProfile(true);
+      getCurrentUserProfile()
+        .then(profile => {
+          setUserProfile(profile);
+        })
+        .catch(error => {
+          console.error("Error al cargar el perfil de usuario:", error);
+          setUserProfile(null);
+        })
+        .finally(() => {
+          setIsLoadingProfile(false);
         });
-    } else if (!session && isLoadingProfile) {
+    } else {
+      // Si no hay sesión, no hay perfil.
+      setUserProfile(null);
+      setIsLoadingProfile(false);
+    }
+  }, [session]);
+
+  const handlePasswordAndFlagUpdated = useCallback(async () => {
+    // Después de actualizar la contraseña, recargamos explícitamente el perfil del usuario.
+    setIsLoadingProfile(true);
+    try {
+        const profile = await getCurrentUserProfile();
+        setUserProfile(profile);
+    } catch (error) {
+        console.error("Error al recargar el perfil:", error);
+        setUserProfile(null);
+    } finally {
         setIsLoadingProfile(false);
     }
-  }, [session, isLoadingProfile, userProfile]); // Incluye las dependencias que usa
-
-  const handlePasswordAndFlagUpdated = useCallback(() => {
-    setUserProfile(null);
-    setIsLoadingProfile(true);
   }, []);
 
   const ProtectedRoute = () => {
@@ -205,8 +207,6 @@ function App() {
     if (!session) {
       return <Navigate to="/login" state={{ from: location }} replace />;
     }
-    // Si la sesión es de PASSWORD_RECOVERY, userProfile será null.
-    // UpdatePasswordPage se maneja fuera de ProtectedRoute en cuanto a esta lógica de perfil.
     if (!userProfile && location.pathname !== '/update-password') { 
         console.error("[ProtectedRoute] Sesión activa pero userProfile es null. Path:", location.pathname);
         return <Navigate to="/login" state={{ from: location, error: "profile_load_failed" }} replace />;
@@ -225,8 +225,6 @@ function App() {
     const currentUserFromOutlet = context?.currentUserFromOutlet;
     
     if (!currentUserFromOutlet) {
-      // Este estado de carga podría ser breve o indicar un problema si persiste.
-      // ProtectedRoute ya debería haber manejado la ausencia de userProfile en casos normales.
       return <div style={{color: 'var(--wa-dark-text-primary)', textAlign: 'center', paddingTop: '50px', fontSize: '1.2em'}}>Cargando datos del usuario...</div>;
     }
     return <DashboardLayout currentUser={currentUserFromOutlet} />;
