@@ -2,7 +2,11 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
-import reportWebVitals from './reportWebVitals';
+// La importación de reportWebVitals ya no es necesaria, la reemplazamos.
+// import reportWebVitals from './reportWebVitals';
+
+// 1. Importamos el registrador del Service Worker.
+import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
@@ -11,7 +15,6 @@ root.render(
   </React.StrictMode>
 );
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals();
+// 2. Activamos el Service Worker para habilitar las funcionalidades PWA.
+// Esto reemplaza la llamada a reportWebVitals().
+serviceWorkerRegistration.register();
