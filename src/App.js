@@ -1,6 +1,5 @@
 // src/App.js
 import React, { useState, useEffect, useCallback } from 'react';
-// 1. IMPORTAMOS LOS HOOKS NECESARIOS DE REACT ROUTER
 import { BrowserRouter as Router, Route, Routes, Navigate, Outlet, useLocation, useOutletContext, useParams, useNavigate } from 'react-router-dom';
 import { supabase, getCurrentUserProfile } from './supabaseClient';
 import LoginPage from './LoginPage';
@@ -21,7 +20,6 @@ const LogoutIcon = () => <svg viewBox="0 0 24 24" width="24" height="24" fill="c
 function useWindowSize() { const [size, setSize] = useState([window.innerWidth, window.innerHeight]); useEffect(() => { const handleResize = () => { setSize([window.innerWidth, window.innerHeight]); }; window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize); }, []); return { width: size[0], height: size[1] }; }
 
 function IconSidebar({ currentFilter, onChangeFilter, onLogout, filterCounts, isMobile }) {
-    // El código de este componente no cambia
     const baseIconButtonStle = { backgroundColor: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', position: 'relative', transition: 'color 0.2s, transform 0.2s' }; const desktopStyle = { width: '80px', backgroundColor: 'var(--wa-dark-bg-main)', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '20px', borderRight: '1px solid var(--wa-dark-border)', flexShrink: 0 }; const mobileStyle = { position: 'fixed', bottom: 0, left: 0, width: '100%', height: 'auto', backgroundColor: 'var(--wa-dark-bg-main)', display: 'flex', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderTop: '1px solid var(--wa-dark-border)', zIndex: 1000, padding: '5px 0' }; const desktopButtonStyle = { ...baseIconButtonStle, padding: '15px', width: '100%', fontSize: '0.7rem' }; const mobileButtonStyle = { ...baseIconButtonStle, padding: '8px 5px', fontSize: '0.6rem', flex: 1 }; const finalContainerStyle = isMobile ? mobileStyle : desktopStyle; const finalButtonStyle = isMobile ? mobileButtonStyle : desktopButtonStyle; const formatCount = (count) => (count > 0 ? ` (${count})` : ''); const needsAgentCount = filterCounts?.needs_agent || 0; const showAttentionHighlight = needsAgentCount > 0; const isAttentionTabSelected = currentFilter === 'needs_agent'; let attentionButtonStyle = { ...finalButtonStyle, color: 'var(--wa-dark-text-sec)'}; let attentionIconContainerClassName = ''; if (isAttentionTabSelected) { attentionButtonStyle.color = 'var(--wa-dark-accent)'; } else if (showAttentionHighlight) { attentionButtonStyle.color = 'var(--wa-dark-alert)'; attentionIconContainerClassName = 'pulse-attention-icon'; } const attentionIconStyle = { transform: (showAttentionHighlight && !isAttentionTabSelected) ? 'scale(1.2)' : 'scale(1)', transition: 'transform 0.2s ease-out', display: 'inline-block' }; const logoutStyle = isMobile ? { ...finalButtonStyle, color: 'var(--wa-dark-text-sec)' } : { ...finalButtonStyle, marginTop: 'auto', marginBottom: '20px' }; return ( <div style={finalContainerStyle}> <button title="Chats Activos" onClick={() => onChangeFilter('active')} style={currentFilter === 'active' ? {...finalButtonStyle, color: 'var(--wa-dark-accent)'} : {...finalButtonStyle, color: 'var(--wa-dark-text-sec)'}} > <div style={{display: 'inline-block'}}><ChatsIcon /></div> Activos{formatCount(filterCounts?.active)} </button> <button title="Chats Archivados" onClick={() => onChangeFilter('archived')} style={currentFilter === 'archived' ? {...finalButtonStyle, color: 'var(--wa-dark-accent)'} : {...finalButtonStyle, color: 'var(--wa-dark-text-sec)'}} > <div style={{display: 'inline-block'}}><ArchiveIcon /></div> Archivados{formatCount(filterCounts?.archived)} </button> <button title="Requieren Atención" onClick={() => onChangeFilter('needs_agent')} style={attentionButtonStyle} > <div className={attentionIconContainerClassName} style={{padding: '1px'}}> <div style={attentionIconStyle}> <NeedsAttentionIcon /> </div> </div> Atención{formatCount(needsAgentCount)} </button> <button title="Chats Bloqueados" onClick={() => onChangeFilter('blocked')} style={currentFilter === 'blocked' ? {...finalButtonStyle, color: 'var(--wa-dark-accent)'} : {...finalButtonStyle, color: 'var(--wa-dark-text-sec)'}} > <div style={{display: 'inline-block'}}><BlockedIcon /></div> Bloqueados{formatCount(filterCounts?.blocked)} </button> <button title="Cerrar Sesión" onClick={onLogout} style={logoutStyle} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--wa-dark-alert)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--wa-dark-text-sec)'} > <LogoutIcon /> {!isMobile && 'Salir'} </button> </div> );
 }
 
@@ -29,8 +27,8 @@ function DashboardLayout({ currentUser }) {
     const { width } = useWindowSize();
     const isMobile = width < 768;
 
-    // 2. LEE EL FILTRO Y EL CHAT DESDE LOS PARÁMETROS DE LA URL
-    const { filterType = 'active', sessionId } = useParams();
+    // --- CORRECCIÓN: Eliminada la variable 'sessionId' que no se usaba ---
+    const { filterType = 'active' } = useParams();
     const navigate = useNavigate();
 
     const [sidebarCounts, setSidebarCounts] = useState({ active: 0, archived: 0, needs_agent: 0, blocked: 0 });
@@ -49,7 +47,6 @@ function DashboardLayout({ currentUser }) {
         if (error) toast.error("Error al cerrar sesión.");
     };
     
-    // 3. LA FUNCIÓN DE CAMBIO DE FILTRO AHORA SOLO CAMBIA LA URL
     const handleFilterChange = (newFilter) => {
         navigate(`/filter/${newFilter}`);
     };
@@ -87,8 +84,8 @@ function DashboardLayout({ currentUser }) {
     );
 }
 
+// El resto de App.js se mantiene igual
 function App() {
-    // La lógica de caché y sesión de App se mantiene igual
     const getCachedUserProfile = () => { try { const cached = localStorage.getItem('cachedUserProfile'); return cached ? JSON.parse(cached) : null; } catch (e) { return null; } };
     const [session, setSession] = useState(null);
     const [userProfile, setUserProfile] = useState(() => getCachedUserProfile());
@@ -109,8 +106,6 @@ function App() {
                     
                     <Route element={<ProtectedRoute />}>
                         <Route path="/set-initial-password" element={<SetInitialPasswordPage onPasswordAndFlagUpdated={handlePasswordAndFlagUpdated} />} />
-                        
-                        {/* --- 4. NUEVA ESTRUCTURA DE RUTAS INTELIGENTE --- */}
                         <Route path="/" element={<Navigate to="/filter/active" replace />} />
                         <Route path="/filter/:filterType" element={<DashboardLayoutWrapper />} />
                         <Route path="/filter/:filterType/chats/:sessionId" element={<DashboardLayoutWrapper />} />
