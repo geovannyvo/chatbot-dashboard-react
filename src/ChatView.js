@@ -1,7 +1,10 @@
 // src/ChatView.js
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-toastify';
-import EmojiPicker from 'emoji-picker-react'; 
+import EmojiPicker from 'emoji-picker-react';
+// --- INICIO DE LA MODIFICACIÓN ---
+import { useNavigate } from 'react-router-dom';
+// --- FIN DE LA MODIFICACIÓN ---
 
 import {
     sendAgentMessageViaN8N,
@@ -9,20 +12,21 @@ import {
     unblockSession,
     saveToKnowledgeBase,
     addOrUpdateContact
-} from './supabaseClient'; 
+} from './supabaseClient';
 
 const SESSION_STATUS = { BOT_ACTIVE: 'bot_active', AGENT_ACTIVE: 'agent_active', NEEDS_AGENT: 'needs_agent', BLOCKED: 'blocked', ARCHIVED: 'archived' };
 const colors = { bgMain: 'var(--wa-dark-bg-main, #111b21)', bgSec: 'var(--wa-dark-bg-sec, #202c33)', border: 'var(--wa-dark-border, #374045)', textPrimary: 'var(--wa-dark-text-primary, #e9edef)', textSec: 'var(--wa-dark-text-sec, #8696a0)', bubbleUser: 'var(--wa-dark-bubble-user, #202c33)', bubbleAgent: 'var(--wa-dark-bubble-agent, #005c4b)', accent: 'var(--wa-dark-accent, #00a884)', alert: 'var(--wa-dark-alert, #f44336)', warningBg: 'var(--wa-dark-warning-bg, #5c4b00)', warningText: 'var(--wa-dark-warning-text, #e9edef)', btnRed: 'var(--wa-dark-button-red, #d9534f)', btnGreen: 'var(--wa-dark-button-green, #5cb85c)', btnYellow: 'var(--wa-dark-button-yellow, #f0ad4e)', btnBlue: 'var(--wa-dark-button-blue, #337ab7)', btnSend: 'var(--wa-dark-button-send, #00a884)' };
 
 const formatSessionId = (id) => {
     if (!id) return '';
-    if (id.startsWith('whatsapp:')) {
-        return id.substring(9);
-    }
-    return id;
+    return id.startsWith('whatsapp:') ? id.substring(9) : id;
 };
 
-// --- Iconos ---
+// --- INICIO DE LA MODIFICACIÓN ---
+// Icono para el botón de "Atrás"
+const BackIcon = () => <svg fill="currentColor" viewBox="0 0 24 24" width="24" height="24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"></path></svg>;
+// --- FIN DE LA MODIFICACIÓN ---
+
 const EditContactIcon = () => <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style={{marginLeft: '10px', cursor: 'pointer', opacity: 0.7, transition: 'opacity 0.2s ease'}} onMouseEnter={(e) => e.currentTarget.style.opacity=1} onMouseLeave={(e) => e.currentTarget.style.opacity=0.7} title="Editar Contacto"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>;
 const BotIcon = () => <span className="BotIcon"><svg viewBox="0 0 24 24" width="20px" height="20px" style={{ marginRight: '8px'}}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-2.5-8.5h5v1h-5zm-1.5 2.5h8V16h-8zM9 9c.83 0 1.5.67 1.5 1.5S9.83 12 9 12s-1.5-.67-1.5-1.5S8.17 9 9 9zm6 0c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5.67-1.5 1.5-1.5z"/></svg></span>;
 const UserIcon = () => <span className="UserIcon"><svg viewBox="0 0 24 24" width="20px" height="20px" style={{ marginRight: '8px'}}><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></span>;
@@ -31,17 +35,20 @@ const BlockIcon = () => <span className="BlockIcon"><svg viewBox="0 0 24 24" wid
 const ArchiveIcon = () => <span className="ArchiveIcon"><svg fill={colors.textSec} viewBox="0 0 24 24" width="20px" height="20px" style={{ marginRight: '8px'}}><path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z"/></svg></span>;
 const NeedsAgentAttentionIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={colors.warningText} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px'}}> <circle cx="12" cy="12" r="10"></circle> <line x1="12" y1="16" x2="12" y2="12"></line> <line x1="12" y1="8" x2="12.01" y2="8"></line> </svg> );
 const SaveKBIcon = ({ onClick, saved }) => ( <svg onClick={onClick} fill={saved ? colors.accent : colors.textSec} viewBox="0 0 24 24" width="18px" height="18px" style={{ cursor: 'pointer', opacity: saved ? 1 : 0.7, transition: 'opacity 0.2s, fill 0.2s', marginLeft: '8px', flexShrink: 0 }} title="Guardar como Pregunta/Respuesta en Base de Conocimiento" onMouseEnter={(e) => e.currentTarget.style.opacity = 1} onMouseLeave={(e) => e.currentTarget.style.opacity = saved ? 1 : 0.7} > <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/> </svg> );
+const MessageStatusIndicator = ({ status }) => { const iconStyle = { marginLeft: '8px', fontSize: '1em', color: colors.textSec, opacity: 0.8 }; if (status === 'enviando') { return <span title="Enviando..." style={iconStyle}>🕒</span>; } if (status === 'fallido') { return <span title="Error al enviar" style={{...iconStyle, color: colors.alert}}>❗️</span>; } return <span title="Entregado" style={iconStyle}>✓</span>; };
 
+// --- INICIO DE LA MODIFICACIÓN ---
+// Se añaden las props `isMobile` y `filterType`
+function ChatView({ sessionId, messages, currentSessionStatus, currentUser, setSessionStatuses, contacts, setContacts, isMobile, filterType }) {
+    const navigate = useNavigate();
+// --- FIN DE LA MODIFICACIÓN ---
 
-function ChatView({ sessionId, messages, currentSessionStatus, currentUser, setSessionStatuses, contacts, setContacts }) {
     const [agentInput, setAgentInput] = useState('');
     const [savedMessages, setSavedMessages] = useState({});
     const messagesEndRef = useRef(null);
     const [showPicker, setShowPicker] = useState(false);
-    
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [confirmModalData, setConfirmModalData] = useState({ question: '', answer: '', action: null });
-    
     const [isContactModalOpen, setIsContactModalOpen] = useState(false);
     const [editingContactName, setEditingContactName] = useState('');
 
@@ -49,212 +56,56 @@ function ChatView({ sessionId, messages, currentSessionStatus, currentUser, setS
     const isArchived = currentSessionStatus === SESSION_STATUS.ARCHIVED;
     const needsAgentAttention = currentSessionStatus === SESSION_STATUS.NEEDS_AGENT;
 
-    useLayoutEffect(() => { messagesEndRef.current?.scrollIntoView(); }, [messages]);
-
-    useEffect(() => {
-        setAgentInput(''); 
-        setSavedMessages({});
-        setIsContactModalOpen(false);
-    }, [sessionId]);
-
+    useLayoutEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "auto" }); }, [messages]);
+    useEffect(() => { setAgentInput(''); setSavedMessages({}); setIsContactModalOpen(false); }, [sessionId]);
     const formatDisplayDate = useCallback((isoString) => { if (!isoString) return ''; const date = new Date(isoString); return isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }); }, []);
     const onEmojiClick = (emojiObject) => { setAgentInput(prevInput => prevInput + emojiObject.emoji); setShowPicker(false); };
-    
-    const handleOpenContactModal = () => {
-        const contactName = contacts[sessionId] || '';
-        setEditingContactName(contactName);
-        setIsContactModalOpen(true);
-    };
 
-    const handlePickContact = async () => {
-        if ('contacts' in navigator && 'select' in navigator.contacts) {
-            try {
-                const contact = await navigator.contacts.select(['name'], { multiple: false });
-                if (contact.length > 0 && contact[0].name && contact[0].name.length > 0) {
-                    setEditingContactName(contact[0].name[0]);
-                    toast.success("Contacto seleccionado.");
-                }
-            } catch (ex) {
-                console.error("Error al seleccionar contacto:", ex);
-                if (ex.name !== 'AbortError') {
-                    toast.error("No se pudo seleccionar el contacto.");
-                }
-            }
-        } else {
-            toast.info("Tu navegador no soporta la selección de contactos.");
-        }
+    // --- INICIO DE LA MODIFICACIÓN ---
+    // Función para manejar el clic en el botón de "Atrás"
+    const handleBack = () => {
+        navigate(`/filter/${filterType}`);
     };
+    // --- FIN DE LA MODIFICACIÓN ---
 
-    const handleSaveContact = async () => {
-        const trimmedName = editingContactName.trim();
-        if (!trimmedName) {
-            toast.error("El nombre no puede estar vacío.");
-            return;
-        }
-        const updatedContact = await addOrUpdateContact(sessionId, trimmedName, currentUser.id);
-        if (updatedContact) {
-            setContacts(prev => ({ ...prev, [sessionId]: trimmedName }));
-            setIsContactModalOpen(false);
-        }
-    };
-    
-    // --- CÓDIGO DE FUNCIONES RESTAURADO ---
-    const handleSendReply = async () => {
-        if (!currentUser || !currentUser.id || !sessionId || isBlocked || isArchived || !agentInput.trim()) {
-            if (isBlocked) toast.warn("No se puede enviar mensaje a un chat bloqueado.");
-            if (isArchived) toast.warn("No se puede enviar mensaje a un chat archivado.");
-            return;
-        }
-        const messageContent = agentInput.trim();
-        const originalStatusBeforeSend = currentSessionStatus;
-        setAgentInput('');
-        const result = await sendAgentMessageViaN8N({ sessionId, messageContent, agentId: currentUser.id });
-
-        if (result.success) {
-            if (originalStatusBeforeSend === SESSION_STATUS.NEEDS_AGENT && setSessionStatuses) {
-                setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...(prev[sessionId] || {}), status: SESSION_STATUS.AGENT_ACTIVE, agent_id: currentUser.id, last_updated: new Date().toISOString() } }));
-                const statusUpdateSuccess = await updateSessionStatus(sessionId, SESSION_STATUS.AGENT_ACTIVE, currentUser.id);
-                if (!statusUpdateSuccess) {
-                    toast.error('Mensaje enviado, pero falló la actualización del estado del chat.');
-                }
-            }
-        } else {
-            toast.error(`Error al enviar mensaje: ${result.details?.message || result.details || result.errorType || 'Desconocido'}`);
-        }
-    };
-
-    const handleChangeSessionState = async (newStatus) => {
-        if (!currentUser || !currentUser.id || !sessionId) {
-            toast.error('Error: No se pudo identificar al usuario o la sesión.');
-            return;
-        }
-        if (isBlocked && !isArchived && newStatus !== SESSION_STATUS.BOT_ACTIVE) {
-            toast.warn("Este chat está bloqueado. Desbloquéalo primero para otras acciones.");
-            return;
-        }
-        if (isArchived && newStatus !== SESSION_STATUS.BOT_ACTIVE){
-            return; 
-        }
-
-        const agentActualId = (newStatus === SESSION_STATUS.AGENT_ACTIVE) ? currentUser.id : null;
-        const previousLocalState = { status: currentSessionStatus, agent_id: (currentSessionStatus === SESSION_STATUS.AGENT_ACTIVE ? currentUser.id : null) };
-
-        if (setSessionStatuses) { 
-            setSessionStatuses(prev => ({
-                ...prev,
-                [sessionId]: { ...(prev[sessionId] || {}), status: newStatus, agent_id: agentActualId, last_updated: new Date().toISOString() }
-            }));
-        }
-        const success = await updateSessionStatus(sessionId, newStatus, agentActualId);
-        if (!success) {
-            toast.error('Error al cambiar el estado del chat.');
-            if (setSessionStatuses) { 
-                setSessionStatuses(prev => ({
-                    ...prev,
-                    [sessionId]: { 
-                        ...(prev[sessionId] || {}), 
-                        status: previousLocalState.status, 
-                        agent_id: previousLocalState.agent_id, 
-                        last_updated: new Date().toISOString() 
-                    }
-                }));
-            }
-        }
-    };
-    
-    const handleUnblockSession = async () => {
-        if (!currentUser || !currentUser.id || !sessionId || isArchived) return;
-        const originalStatus = currentSessionStatus;
-        if (setSessionStatuses) {
-            setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...(prev[sessionId] || {}), status: SESSION_STATUS.BOT_ACTIVE, agent_id: null, last_updated: new Date().toISOString() } }));
-        }
-        const success = await unblockSession(sessionId); 
-        if (!success) {
-            toast.error("Error al intentar desbloquear al usuario.");
-            if (setSessionStatuses) {
-                setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...(prev[sessionId] || {}), status: originalStatus, last_updated: new Date().toISOString() } }));
-            }
-        }
-    };
-
-    const handleSaveToKB = (answerMessage, messageIndex) => {
-        if (!currentUser || !currentUser.id || !answerMessage || messageIndex < 0 || savedMessages[answerMessage.id] || isArchived || isBlocked) return;
-        let questionMessage = null;
-        for (let i = messageIndex - 1; i >= 0; i--) {
-            if (messages[i].type === 'human' && !messages[i].isAgentMessage) {
-                questionMessage = messages[i];
-                break;
-            }
-        }
-        if (!questionMessage) {
-            toast.warn("No se encontró un mensaje de usuario anterior claro para usar como pregunta.");
-            return;
-        }
-        setConfirmModalData({
-            question: questionMessage.content,
-            answer: answerMessage.content,
-            action: async () => {
-                const success = await saveToKnowledgeBase(questionMessage.content, answerMessage.content, currentUser.id, answerMessage.id, sessionId);
-                if (success) {
-                    toast.success("¡Guardado en la Base de Conocimiento!");
-                    setSavedMessages(prev => ({ ...prev, [answerMessage.id]: true }));
-                } else {
-                    toast.error("Error al guardar en la Base de Conocimiento.");
-                }
-            }
-        });
-        setIsConfirmModalOpen(true);
-    };
+    // El resto de las funciones de manejo no cambian
+    const handleOpenContactModal = () => { const contactName = contacts[sessionId] || ''; setEditingContactName(contactName); setIsContactModalOpen(true); };
+    const handlePickContact = async () => { if ('contacts' in navigator && 'select' in navigator.contacts) { try { const contact = await navigator.contacts.select(['name'], { multiple: false }); if (contact.length > 0 && contact[0].name && contact[0].name.length > 0) { setEditingContactName(contact[0].name[0]); toast.success("Contacto seleccionado."); } } catch (ex) { console.error("Error al seleccionar contacto:", ex); if (ex.name !== 'AbortError') { toast.error("No se pudo seleccionar el contacto."); } } } else { toast.info("Tu navegador no soporta la selección de contactos."); } };
+    const handleSaveContact = async () => { const trimmedName = editingContactName.trim(); if (!trimmedName) { toast.error("El nombre no puede estar vacío."); return; } const updatedContact = await addOrUpdateContact(sessionId, trimmedName, currentUser.id); if (updatedContact) { setContacts(prev => ({ ...prev, [sessionId]: trimmedName })); setIsContactModalOpen(false); } };
+    const handleSendReply = async () => { if (!currentUser || !currentUser.id || !sessionId || isBlocked || isArchived || !agentInput.trim()) { if (isBlocked) toast.warn("No se puede enviar mensaje a un chat bloqueado."); if (isArchived) toast.warn("No se puede enviar mensaje a un chat archivado."); return; } const messageContent = agentInput.trim(); const originalStatusBeforeSend = currentSessionStatus; setAgentInput(''); const result = await sendAgentMessageViaN8N({ sessionId, messageContent, agentId: currentUser.id }); if (result.success) { if (originalStatusBeforeSend === SESSION_STATUS.NEEDS_AGENT && setSessionStatuses) { setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...(prev[sessionId] || {}), status: SESSION_STATUS.AGENT_ACTIVE, agent_id: currentUser.id, last_updated: new Date().toISOString() } })); const statusUpdateSuccess = await updateSessionStatus(sessionId, SESSION_STATUS.AGENT_ACTIVE, currentUser.id); if (!statusUpdateSuccess) { toast.error('Mensaje enviado, pero falló la actualización del estado del chat.'); } } } else { toast.error(`Error al enviar mensaje: ${result.details?.message || result.details || result.errorType || 'Desconocido'}`); } };
+    const handleChangeSessionState = async (newStatus) => { if (!currentUser || !currentUser.id || !sessionId) { toast.error('Error: No se pudo identificar al usuario o la sesión.'); return; } if (isBlocked && !isArchived && newStatus !== SESSION_STATUS.BOT_ACTIVE) { toast.warn("Este chat está bloqueado. Desbloquéalo primero para otras acciones."); return; } if (isArchived && newStatus !== SESSION_STATUS.BOT_ACTIVE){ return; } const agentActualId = (newStatus === SESSION_STATUS.AGENT_ACTIVE) ? currentUser.id : null; const previousLocalState = { status: currentSessionStatus, agent_id: (currentSessionStatus === SESSION_STATUS.AGENT_ACTIVE ? currentUser.id : null) }; if (setSessionStatuses) { setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...(prev[sessionId] || {}), status: newStatus, agent_id: agentActualId, last_updated: new Date().toISOString() } })); } const success = await updateSessionStatus(sessionId, newStatus, agentActualId); if (!success) { toast.error('Error al cambiar el estado del chat.'); if (setSessionStatuses) { setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...(prev[sessionId] || {}), status: previousLocalState.status, agent_id: previousLocalState.agent_id, last_updated: new Date().toISOString() } })); } } };
+    const handleUnblockSession = async () => { if (!currentUser || !currentUser.id || !sessionId || isArchived) return; const originalStatus = currentSessionStatus; if (setSessionStatuses) { setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...(prev[sessionId] || {}), status: SESSION_STATUS.BOT_ACTIVE, agent_id: null, last_updated: new Date().toISOString() } })); } const success = await unblockSession(sessionId); if (!success) { toast.error("Error al intentar desbloquear al usuario."); if (setSessionStatuses) { setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...(prev[sessionId] || {}), status: originalStatus, last_updated: new Date().toISOString() } })); } } };
+    const handleSaveToKB = (answerMessage, messageIndex) => { if (!currentUser || !currentUser.id || !answerMessage || messageIndex < 0 || savedMessages[answerMessage.id] || isArchived || isBlocked) return; let questionMessage = null; for (let i = messageIndex - 1; i >= 0; i--) { if (messages[i].type === 'human' && !messages[i].isAgentMessage) { questionMessage = messages[i]; break; } } if (!questionMessage) { toast.warn("No se encontró un mensaje de usuario anterior claro para usar como pregunta."); return; } setConfirmModalData({ question: questionMessage.content, answer: answerMessage.content, action: async () => { const success = await saveToKnowledgeBase(questionMessage.content, answerMessage.content, currentUser.id, answerMessage.id, sessionId); if (success) { toast.success("¡Guardado en la Base de Conocimiento!"); setSavedMessages(prev => ({ ...prev, [answerMessage.id]: true })); } else { toast.error("Error al guardar en la Base de Conocimiento."); } } }); setIsConfirmModalOpen(true); };
     const handleConfirmAndCloseModal = async () => { if (confirmModalData.action) { await confirmModalData.action(); } setIsConfirmModalOpen(false); };
-
     const buttonBaseStyle = { border: 'none', padding: '8px 15px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold', transition: 'filter 0.2s ease', color: 'white', fontSize: '0.9em' };
     const buttonHoverStyle = (e) => { e.currentTarget.style.filter = 'brightness(1.15)'; };
     const buttonLeaveStyle = (e) => { e.currentTarget.style.filter = 'brightness(1)';};
-
     const contactDisplayName = contacts[sessionId] || formatSessionId(sessionId);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: colors.bgSec, position: 'relative' }}>
-            
             {isConfirmModalOpen && ( <><div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 100 }} onClick={() => setIsConfirmModalOpen(false)}></div><div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: colors.bgSec, padding: '25px', borderRadius: '8px', zIndex: 101, width: '90%', maxWidth: '500px', border: `1px solid ${colors.border}`, boxShadow: '0 10px 30px rgba(0,0,0,0.3)' }}><h3 style={{ marginTop: 0, color: colors.textPrimary }}>Confirmar Guardado</h3><div style={{ fontSize: '0.9em', color: colors.textSec, marginBottom: '20px' }}><p style={{ margin: '5px 0' }}><strong>Pregunta:</strong> {confirmModalData.question}</p><p style={{ margin: '5px 0' }}><strong>Respuesta:</strong> {confirmModalData.answer}</p></div><div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}><button onClick={() => setIsConfirmModalOpen(false)} style={{ ...buttonBaseStyle, backgroundColor: colors.textSec }}>Cancelar</button><button onClick={handleConfirmAndCloseModal} style={{ ...buttonBaseStyle, backgroundColor: colors.accent }}>Confirmar</button></div></div></> )}
+            {isContactModalOpen && ( <><div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 100 }} onClick={() => setIsContactModalOpen(false)}></div><div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: colors.bgSec, padding: '25px', borderRadius: '8px', zIndex: 101, width: '90%', maxWidth: '400px', border: `1px solid ${colors.border}`, boxShadow: '0 10px 30px rgba(0,0,0,0.3)' }}><h3 style={{ marginTop: 0, color: colors.textPrimary }}>Editar Contacto</h3><p style={{ fontSize: '0.9em', color: colors.textSec, marginBottom: '15px' }}>Número: <strong>{formatSessionId(sessionId)}</strong></p><div style={{marginBottom: '20px'}}><label htmlFor="contact-name" style={{display: 'block', marginBottom: '5px', color: colors.textSec}}>Nombre:</label><input id="contact-name" type="text" value={editingContactName} onChange={(e) => setEditingContactName(e.target.value)} placeholder="Nombre del contacto" style={{ width: '100%', padding: '10px', borderRadius: '4px', border: `1px solid ${colors.border}`, backgroundColor: colors.bgMain, color: colors.textPrimary }} /></div><button onClick={handlePickContact} style={{...buttonBaseStyle, backgroundColor: colors.btnBlue, width: '100%', marginBottom: '10px'}}>Importar desde el Teléfono</button><div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}><button onClick={() => setIsContactModalOpen(false)} style={{ ...buttonBaseStyle, backgroundColor: colors.textSec }}>Cancelar</button><button onClick={handleSaveContact} style={{ ...buttonBaseStyle, backgroundColor: colors.accent }}>Guardar</button></div></div></> )}
             
-            {isContactModalOpen && (
-                <>
-                    <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 100 }}
-                         onClick={() => setIsContactModalOpen(false)}>
-                    </div>
-                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: colors.bgSec, padding: '25px', borderRadius: '8px', zIndex: 101, width: '90%', maxWidth: '400px', border: `1px solid ${colors.border}`, boxShadow: '0 10px 30px rgba(0,0,0,0.3)' }}>
-                        <h3 style={{ marginTop: 0, color: colors.textPrimary }}>Editar Contacto</h3>
-                        <p style={{ fontSize: '0.9em', color: colors.textSec, marginBottom: '15px' }}>
-                            Número: <strong>{formatSessionId(sessionId)}</strong>
-                        </p>
-                        <div style={{marginBottom: '20px'}}>
-                            <label htmlFor="contact-name" style={{display: 'block', marginBottom: '5px', color: colors.textSec}}>Nombre:</label>
-                            <input
-                                id="contact-name"
-                                type="text"
-                                value={editingContactName}
-                                onChange={(e) => setEditingContactName(e.target.value)}
-                                placeholder="Nombre del contacto"
-                                style={{ width: '100%', padding: '10px', borderRadius: '4px', border: `1px solid ${colors.border}`, backgroundColor: colors.bgMain, color: colors.textPrimary }}
-                            />
-                        </div>
-                        <button onClick={handlePickContact} style={{...buttonBaseStyle, backgroundColor: colors.btnBlue, width: '100%', marginBottom: '10px'}}>Importar desde el Teléfono</button>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                            <button onClick={() => setIsContactModalOpen(false)} style={{ ...buttonBaseStyle, backgroundColor: colors.textSec }}>Cancelar</button>
-                            <button onClick={handleSaveContact} style={{ ...buttonBaseStyle, backgroundColor: colors.accent }}>Guardar</button>
-                        </div>
-                    </div>
-                </>
-            )}
-
             <div style={{ padding: '10px 20px', backgroundColor: colors.bgSec, borderBottom: `1px solid ${colors.border}`, flexShrink: 0 }}>
+                {/* --- INICIO DE LA MODIFICACIÓN --- */}
                 <h3 style={{ margin: 0, color: colors.textPrimary, fontWeight: 500, display: 'flex', alignItems: 'center', fontSize: '1.1em' }}>
-                    {sessionId ? `Chat: ${contactDisplayName}` : 'Conversación'}
-                    {sessionId && <span onClick={handleOpenContactModal}><EditContactIcon /></span>}
+                    {isMobile && (
+                        <span onClick={handleBack} style={{ marginRight: '15px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                            <BackIcon />
+                        </span>
+                    )}
+                    {sessionId ? (
+                        <>
+                            <span>{contactDisplayName}</span>
+                            <span onClick={handleOpenContactModal}><EditContactIcon /></span>
+                        </>
+                    ) : 'Conversación'}
+
                     {isBlocked && <span style={{ color: colors.alert, marginLeft: '10px', fontWeight: 'bold', fontSize: '0.9em' }}>(BLOQUEADO)</span>}
                     {isArchived && !isBlocked && <span style={{ color: colors.textSec, marginLeft: '10px', fontWeight: 'normal', fontSize: '0.9em' }}>(ARCHIVADO)</span>}
                 </h3>
+                {/* --- FIN DE LA MODIFICACIÓN --- */}
             </div>
             
             {needsAgentAttention && !isBlocked && !isArchived && ( <div style={{ padding: '10px 15px', backgroundColor: colors.warningBg, color: colors.warningText, textAlign: 'center', margin: '10px 15px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${colors.btnYellow}`, flexShrink: 0 }}> <NeedsAgentAttentionIcon /> <span style={{marginLeft: '10px', fontWeight: 'bold', fontSize: '0.9em'}}>Este usuario requiere atención.</span> </div> )}
@@ -269,6 +120,7 @@ function ChatView({ sessionId, messages, currentSessionStatus, currentUser, setS
                     if (isAgent) { Object.assign(messageStyle, { backgroundColor: colors.bubbleAgent, marginLeft: 'auto', borderBottomRightRadius: '0px' }); }
                     else if (isUser) { Object.assign(messageStyle, { backgroundColor: colors.bubbleUser, marginRight: 'auto', borderBottomLeftRadius: '0px' }); }
                     else { Object.assign(messageStyle, { backgroundColor: colors.bgSec, marginRight: 'auto', borderBottomLeftRadius: '0px', fontStyle: 'italic', opacity: 0.8 }); }
+                    
                     return (
                         <li key={interaction.id || index} style={messageStyle}>
                             <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px', fontWeight: 'bold', fontSize: '0.8em', color: isAgent ? '#a3e6d6' : colors.textSec, opacity: 0.9 }}>
@@ -276,7 +128,12 @@ function ChatView({ sessionId, messages, currentSessionStatus, currentUser, setS
                                 <span>{isAgent ? (currentUser?.full_name || 'Agente') : isUser ? contactDisplayName : 'Chatbot Asistente'}</span>
                             </div>
                             <p style={{ margin: 0, paddingRight: isAgent && !isBlocked && !isArchived ? '25px' : '0' }}>{interaction.content}</p>
-                            {interaction.time && (<small style={{ fontSize: '0.7em', color: isAgent ? '#a3e6d6' : colors.textSec, display: 'block', textAlign: 'right', marginTop: '4px', opacity: 0.7 }}>{formatDisplayDate(interaction.time)}</small>)}
+                            
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '4px' }}>
+                                {interaction.time && (<small style={{ fontSize: '0.7em', color: isAgent ? '#a3e6d6' : colors.textSec, opacity: 0.7 }}>{formatDisplayDate(interaction.time)}</small>)}
+                                {isAgent && <MessageStatusIndicator status={interaction.status} />}
+                            </div>
+
                             {isAgent && !isBlocked && !isArchived && (
                                 <div style={{ position: 'absolute', right: '8px', top: '8px' }}>
                                     <SaveKBIcon onClick={(e) => { e.stopPropagation(); handleSaveToKB(interaction, index); }} saved={savedMessages[interaction.id] || false} />
@@ -285,7 +142,7 @@ function ChatView({ sessionId, messages, currentSessionStatus, currentUser, setS
                         </li>
                     );
                 })}
-                <div ref={messagesEndRef} /> 
+                <div ref={messagesEndRef} />
             </ul>
             
             <div style={{ padding: '10px 15px', borderTop: `1px solid ${colors.border}`, backgroundColor: colors.bgSec, flexShrink: 0, position: 'relative' }}>
