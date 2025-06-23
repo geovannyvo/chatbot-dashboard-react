@@ -1,13 +1,11 @@
 // chatbot-dashboard-react/src/supabaseClient.js
 import { createClient } from '@supabase/supabase-js';
-import { toast } from 'react-toastify'; // <-- Importación añadida
+import { toast } from 'react-toastify';
 
-// Asegúrate de que estas variables estén en tu archivo .env
+// Las variables de entorno y la inicialización no cambian.
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 const N8N_WEBHOOK_URL_AGENT_SENDS = process.env.REACT_APP_N8N_AGENT_WEBHOOK_URL;
-
-console.log("VERIFICANDO URL DE SUPABASE EN USO:", supabaseUrl);
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error("¡ERROR CRÍTICO! Variables de Supabase no definidas en .env para chatbot-dashboard-react.");
@@ -18,7 +16,8 @@ if (!N8N_WEBHOOK_URL_AGENT_SENDS) {
 
 export const supabase = (supabaseUrl && supabaseAnonKey) ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
-// --- FUNCIONES PARA EL DASHBOARD DE AGENTE ---
+// --- El resto de las funciones (getCurrentUserProfile, updateUserPasswordChangeFlag, etc.) no cambian ---
+// ... (omito el código sin cambios por brevedad, no lo borres de tu archivo)
 
 export async function getCurrentUserProfile() {
   if (!supabase) {
@@ -79,10 +78,9 @@ export async function updateUserPasswordChangeFlag(userId, needsChange) {
   }
 }
 
-// --- Funciones que ya teníamos para el chat ---
-
 export async function getChatHistory(sessionId = null, limit = 100) {
   if (!supabase) return null;
+  // Esta función ya usa select('*'), así que obtendrá la nueva columna 'status' automáticamente. No se necesitan cambios aquí.
   try {
     let query = supabase.from('n8n_chat_histories').select('*').order('time', { ascending: false }).limit(limit);
     if (sessionId) query = query.eq('session_id', sessionId);
@@ -144,6 +142,7 @@ export async function updateSessionStatus(sessionId, newStatus, agentId = null) 
   } catch (err) { console.error('Error inesperado en updateSessionStatus:', err); return false; }
 }
 
+// --- INICIO DE LA MODIFICACIÓN ---
 export async function sendAgentMessageViaN8N({ sessionId, messageContent, agentId }) {
   if (!N8N_WEBHOOK_URL_AGENT_SENDS || !N8N_WEBHOOK_URL_AGENT_SENDS.startsWith('http')) {
     return { success: false, errorType: "config", details: "REACT_APP_N8N_AGENT_WEBHOOK_URL no configurada." };
@@ -151,20 +150,40 @@ export async function sendAgentMessageViaN8N({ sessionId, messageContent, agentI
   if (!supabase) return { success: false, errorType: "supabase", details: "Cliente Supabase no inicializado." };
 
   try {
+    // Se añade el campo 'status' con el valor 'enviando' al insertar el mensaje.
     const { data: savedMessage, error: saveError } = await supabase.from('n8n_chat_histories').insert({
-      session_id: sessionId, message: { type: 'ai', content: messageContent },
-      time: new Date().toISOString(), sent_by_agent: true, agent_id: agentId
+      session_id: sessionId,
+      message: { type: 'ai', content: messageContent },
+      time: new Date().toISOString(),
+      sent_by_agent: true,
+      agent_id: agentId,
+      status: 'enviando' // <-- CAMBIO CLAVE AQUÍ
     }).select().single();
+
     if (saveError) { return { success: false, errorType: "supabase_save", details: saveError }; }
 
+    // El resto de la lógica para llamar a n8n permanece igual por ahora.
     const response = await fetch(N8N_WEBHOOK_URL_AGENT_SENDS, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: sessionId, message: messageContent, agentId: agentId }),
+      body: JSON.stringify({
+          sessionId: sessionId,
+          message: messageContent,
+          agentId: agentId,
+          messageId: savedMessage.id // Enviamos el ID del mensaje a n8n para la futura confirmación
+      }),
     });
-    if (!response.ok) { return { success: false, errorType: "n8n_webhook", details: `n8n respondió con ${response.status}` }; }
+    if (!response.ok) {
+        // Si n8n falla, podríamos actualizar el mensaje a 'fallido' aquí mismo.
+        await supabase.from('n8n_chat_histories').update({ status: 'fallido' }).eq('id', savedMessage.id);
+        return { success: false, errorType: "n8n_webhook", details: `n8n respondió con ${response.status}` };
+    }
     return { success: true, messageId: savedMessage.id };
-  } catch (error) { return { success: false, errorType: "network_or_code", details: error }; }
+  } catch (error) {
+      // Manejar el caso donde no se pudo ni guardar el mensaje.
+      return { success: false, errorType: "network_or_code", details: error };
+  }
 }
+// --- FIN DE LA MODIFICACIÓN ---
 
 export async function setPinStatus(sessionId, newPinnedState) {
   if (!supabase) return false;
@@ -241,12 +260,6 @@ export async function saveToKnowledgeBase(question, answer, agentId, messageId =
   } catch (error) { console.error('Error inesperado en saveToKnowledgeBase:', error); return false; }
 }
 
-// --- FUNCIONES PARA LA GESTIÓN DE CONTACTOS ---
-
-/**
- * Obtiene todos los contactos de la base de datos.
- * @returns {Promise<Array>} Una lista de objetos de contacto.
- */
 export async function getContacts() {
     if (!supabase) return [];
     const { data, error } = await supabase
@@ -260,14 +273,6 @@ export async function getContacts() {
     return data;
 }
 
-/**
- * Añade un nuevo contacto o actualiza el nombre de uno existente.
- * La base de datos se encarga de manejar el conflicto en 'phone_number' gracias a la restricción UNIQUE.
- * @param {string} phoneNumber - El número de teléfono del contacto.
- * @param {string} displayName - El nombre a mostrar para el contacto.
- * @param {string} agentId - El ID del agente que crea/actualiza el contacto.
- * @returns {Promise<Object|null>} El contacto creado/actualizado o null si hay un error.
- */
 export async function addOrUpdateContact(phoneNumber, displayName, agentId) {
     if (!phoneNumber || !displayName || !agentId) {
         console.error("Faltan datos para crear/actualizar el contacto.");
@@ -284,7 +289,7 @@ export async function addOrUpdateContact(phoneNumber, displayName, agentId) {
                 created_by: agentId
             },
             {
-                onConflict: 'phone_number', // Si el número ya existe, actualiza los otros campos.
+                onConflict: 'phone_number',
             }
         )
         .select()

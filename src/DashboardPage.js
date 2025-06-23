@@ -160,4 +160,3 @@ function DashboardPage({ currentUser, onCountsChange, isMobile, filterType }) {
 }
 
 export default DashboardPage;
-

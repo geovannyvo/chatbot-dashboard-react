@@ -159,4 +159,3 @@ function SessionList({
 }
 
 export default React.memo(SessionList);
-
