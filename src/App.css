@@ -1,5 +1,3 @@
-/* src/App.css */
-
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -24,7 +22,7 @@
   --wa-dark-button-yellow: #f0ad4e; /* Usado para botones de "Atender" y borde de advertencia needs_agent */
   --wa-dark-button-blue: #337ab7;
   --wa-dark-button-send: #00a884;
-
+  
   /* Nuevas variables para las advertencias */
   --wa-dark-warning-bg: #5c4b00;  
   --wa-dark-warning-text: #e9edef;  
@@ -43,10 +41,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--wa-dark-bg-main);  
   color: var(--wa-dark-text-primary);  
-}
-
-.App {
-  /* text-align: center; */
 }
 
 /* --- Cabecera (si la usas en algún layout) --- */
@@ -134,22 +128,11 @@ textarea::placeholder {
 
 /* --- Estilos para iconos SVG --- */
 svg {
-    fill: var(--wa-dark-text-sec); 
+    fill: currentColor; /* Hereda el color del botón padre */
     /* vertical-align: middle; */  
 }
 
-/* Clases específicas para cambiar el color de relleno de los iconos SVG */
-/* Se quitaron los !important, es mejor manejar especificidad con estilos en línea o clases más específicas si es necesario */
-.BotIcon svg, .BotIconMini svg { fill: var(--wa-dark-blue); }
-.UserIcon svg, .UserIconMini svg { fill: var(--wa-dark-blue); }
-.AgentIcon svg, .AgentIconMini svg { fill: var(--wa-dark-orange); }
-
-/* Para el icono de NeedsAttentionIcon, el color se manejará dinámicamente en App.js */
-/* Si quieres que el icono de alerta general (no el de la pestaña) siempre pulse y sea rojo: */
-/* .AlertIcon svg, .AlertIconMini svg { fill: var(--wa-dark-alert); animation: pulse 1.5s infinite; } */
-
-.BlockIcon svg, .BlockIconMini svg { fill: var(--wa-dark-grey); }
-
+/* Se eliminan las clases específicas de color para que los SVG hereden el color del botón */
 
 /* === NUEVA ANIMACIÓN PARA EL BOTÓN "ATENCIÓN" === */
 @keyframes pulse-red {
@@ -169,3 +152,37 @@ svg {
   animation: pulse-red 1.8s infinite;
   display: inline-block; /* Para que el box-shadow se aplique correctamente */
 }
+
+/* --- INICIO DE LA MODIFICACIÓN --- */
+/* === PASO 3: Estilos para el Contador Numérico === */
+.unread-counter {
+  position: absolute;
+  top: -5px;      /* Ajustar para posicionar sobre el ícono */
+  right: -8px;    /* Ajustar para posicionar sobre el ícono */
+  background-color: var(--wa-dark-accent);
+  color: var(--wa-dark-bg-main); /* Texto oscuro para mejor contraste sobre verde */
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7em;
+  font-weight: bold;
+  border: 2px solid var(--wa-dark-bg-main);
+  line-height: 1;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.5); /* Sombra sutil */
+  z-index: 1; /* Asegurar que esté por encima del ícono */
+}
+
+/* En móvil, el contador puede ser un poco más pequeño */
+@media (max-width: 768px) {
+  .unread-counter {
+    width: 20px;
+    height: 20px;
+    font-size: 0.65em;
+    top: -4px;
+    right: -6px;
+  }
+}
+/* --- FIN DE LA MODIFICACIÓN --- */
