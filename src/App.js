@@ -1,4 +1,3 @@
-// src/App.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate, Outlet, useLocation, useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { supabase, getCurrentUserProfile } from './supabaseClient';
@@ -19,11 +18,73 @@ const BlockedIcon = () => <svg viewBox="0 0 24 24" width="24" height="24" fill="
 const LogoutIcon = () => <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>;
 function useWindowSize() { const [size, setSize] = useState([window.innerWidth, window.innerHeight]); useEffect(() => { const handleResize = () => { setSize([window.innerWidth, window.innerHeight]); }; window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize); }, []); return { width: size[0], height: size[1] }; }
 
+// --- INICIO DE LA MODIFICACIÓN ---
+// PASO 3: Actualizar la Interfaz de Usuario (IconSidebar)
 function IconSidebar({ currentFilter, onChangeFilter, onLogout, filterCounts, isMobile }) {
-    const baseIconButtonStle = { backgroundColor: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', position: 'relative', transition: 'color 0.2s, transform 0.2s' }; const desktopStyle = { width: '80px', backgroundColor: 'var(--wa-dark-bg-main)', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '20px', borderRight: '1px solid var(--wa-dark-border)', flexShrink: 0 }; const mobileStyle = { position: 'fixed', bottom: 0, left: 0, width: '100%', height: 'auto', backgroundColor: 'var(--wa-dark-bg-main)', display: 'flex', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderTop: '1px solid var(--wa-dark-border)', zIndex: 1000, padding: '5px 0' }; const desktopButtonStyle = { ...baseIconButtonStle, padding: '15px', width: '100%', fontSize: '0.7rem' }; const mobileButtonStyle = { ...baseIconButtonStle, padding: '8px 5px', fontSize: '0.6rem', flex: 1 }; const finalContainerStyle = isMobile ? mobileStyle : desktopStyle; const finalButtonStyle = isMobile ? mobileButtonStyle : desktopButtonStyle; const formatCount = (count) => (count > 0 ? ` (${count})` : ''); const needsAgentCount = filterCounts?.needs_agent || 0; const showAttentionHighlight = needsAgentCount > 0; const isAttentionTabSelected = currentFilter === 'needs_agent'; let attentionButtonStyle = { ...finalButtonStyle, color: 'var(--wa-dark-text-sec)'}; let attentionIconContainerClassName = ''; if (isAttentionTabSelected) { attentionButtonStyle.color = 'var(--wa-dark-accent)'; } else if (showAttentionHighlight) { attentionButtonStyle.color = 'var(--wa-dark-alert)'; attentionIconContainerClassName = 'pulse-attention-icon'; } const attentionIconStyle = { transform: (showAttentionHighlight && !isAttentionTabSelected) ? 'scale(1.2)' : 'scale(1)', transition: 'transform 0.2s ease-out', display: 'inline-block' }; const logoutStyle = isMobile ? { ...finalButtonStyle, color: 'var(--wa-dark-text-sec)' } : { ...finalButtonStyle, marginTop: 'auto', marginBottom: '20px' }; return ( <div style={finalContainerStyle}> <button title="Chats Activos" onClick={() => onChangeFilter('active')} style={currentFilter === 'active' ? {...finalButtonStyle, color: 'var(--wa-dark-accent)'} : {...finalButtonStyle, color: 'var(--wa-dark-text-sec)'}} > <div style={{display: 'inline-block'}}><ChatsIcon /></div> Activos{formatCount(filterCounts?.active)} </button> <button title="Chats Archivados" onClick={() => onChangeFilter('archived')} style={currentFilter === 'archived' ? {...finalButtonStyle, color: 'var(--wa-dark-accent)'} : {...finalButtonStyle, color: 'var(--wa-dark-text-sec)'}} > <div style={{display: 'inline-block'}}><ArchiveIcon /></div> Archivados{formatCount(filterCounts?.archived)} </button> <button title="Requieren Atención" onClick={() => onChangeFilter('needs_agent')} style={attentionButtonStyle} > <div className={attentionIconContainerClassName} style={{padding: '1px'}}> <div style={attentionIconStyle}> <NeedsAttentionIcon /> </div> </div> Atención{formatCount(needsAgentCount)} </button> <button title="Chats Bloqueados" onClick={() => onChangeFilter('blocked')} style={currentFilter === 'blocked' ? {...finalButtonStyle, color: 'var(--wa-dark-accent)'} : {...finalButtonStyle, color: 'var(--wa-dark-text-sec)'}} > <div style={{display: 'inline-block'}}><BlockedIcon /></div> Bloqueados{formatCount(filterCounts?.blocked)} </button> <button title="Cerrar Sesión" onClick={onLogout} style={logoutStyle} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--wa-dark-alert)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--wa-dark-text-sec)'} > <LogoutIcon /> {!isMobile && 'Salir'} </button> </div> );
+    const baseIconButtonStle = { backgroundColor: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', position: 'relative', transition: 'color 0.2s, transform 0.2s' };
+    const desktopStyle = { width: '80px', backgroundColor: 'var(--wa-dark-bg-main)', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '20px', borderRight: '1px solid var(--wa-dark-border)', flexShrink: 0 };
+    const mobileStyle = { position: 'fixed', bottom: 0, left: 0, width: '100%', height: 'auto', backgroundColor: 'var(--wa-dark-bg-main)', display: 'flex', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderTop: '1px solid var(--wa-dark-border)', zIndex: 1000, padding: '5px 0' };
+    const desktopButtonStyle = { ...baseIconButtonStle, padding: '15px', width: '100%', fontSize: '0.7rem' };
+    const mobileButtonStyle = { ...baseIconButtonStle, padding: '8px 5px', fontSize: '0.6rem', flex: 1 };
+
+    const finalContainerStyle = isMobile ? mobileStyle : desktopStyle;
+    const finalButtonStyle = isMobile ? mobileButtonStyle : desktopButtonStyle;
+
+    const needsAgentCount = filterCounts?.needs_agent || 0;
+    const showAttentionHighlight = needsAgentCount > 0;
+    const isAttentionTabSelected = currentFilter === 'needs_agent';
+
+    let attentionButtonStyle = { ...finalButtonStyle, color: 'var(--wa-dark-text-sec)' };
+    let attentionIconContainerClassName = '';
+    if (isAttentionTabSelected) {
+        attentionButtonStyle.color = 'var(--wa-dark-accent)';
+    } else if (showAttentionHighlight) {
+        attentionButtonStyle.color = 'var(--wa-dark-alert)';
+        attentionIconContainerClassName = 'pulse-attention-icon';
+    }
+
+    const attentionIconStyle = { transform: (showAttentionHighlight && !isAttentionTabSelected) ? 'scale(1.2)' : 'scale(1)', transition: 'transform 0.2s ease-out', display: 'inline-block' };
+
+    const logoutStyle = isMobile ? { ...finalButtonStyle, color: 'var(--wa-dark-text-sec)' } : { ...finalButtonStyle, marginTop: 'auto', marginBottom: '20px' };
+
+    // Componente wrapper para el ícono y su contador
+    const IconWrapper = ({ children, count }) => (
+        <div style={{ position: 'relative', display: 'inline-block' }}>
+            {children}
+            {count > 0 && <span className="unread-counter">{count}</span>}
+        </div>
+    );
+
+    return (
+        <div style={finalContainerStyle}>
+            <button title="Chats Activos" onClick={() => onChangeFilter('active')} style={currentFilter === 'active' ? { ...finalButtonStyle, color: 'var(--wa-dark-accent)' } : { ...finalButtonStyle, color: 'var(--wa-dark-text-sec)' }}>
+                <IconWrapper count={filterCounts?.active}><ChatsIcon /></IconWrapper>
+                <span>Activos</span>
+            </button>
+            <button title="Chats Archivados" onClick={() => onChangeFilter('archived')} style={currentFilter === 'archived' ? { ...finalButtonStyle, color: 'var(--wa-dark-accent)' } : { ...finalButtonStyle, color: 'var(--wa-dark-text-sec)' }}>
+                <IconWrapper count={filterCounts?.archived}><ArchiveIcon /></IconWrapper>
+                <span>Archivados</span>
+            </button>
+            <button title="Requieren Atención" onClick={() => onChangeFilter('needs_agent')} style={attentionButtonStyle}>
+                <div className={attentionIconContainerClassName} style={{ padding: '1px' }}>
+                    <div style={attentionIconStyle}>
+                        <IconWrapper count={needsAgentCount}><NeedsAttentionIcon /></IconWrapper>
+                    </div>
+                </div>
+                <span>Atención</span>
+            </button>
+            <button title="Chats Bloqueados" onClick={() => onChangeFilter('blocked')} style={currentFilter === 'blocked' ? { ...finalButtonStyle, color: 'var(--wa-dark-accent)' } : { ...finalButtonStyle, color: 'var(--wa-dark-text-sec)' }}>
+                <IconWrapper count={filterCounts?.blocked}><BlockedIcon /></IconWrapper>
+                <span>Bloqueados</span>
+            </button>
+            <button title="Cerrar Sesión" onClick={onLogout} style={logoutStyle} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--wa-dark-alert)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--wa-dark-text-sec)'}>
+                <LogoutIcon />
+                {!isMobile && 'Salir'}
+            </button>
+        </div>
+    );
 }
 
-// --- INICIO DE LA MODIFICACIÓN ---
 function DashboardLayout({ currentUser }) {
     const { width } = useWindowSize();
     const isMobile = width < 768;
@@ -31,14 +92,16 @@ function DashboardLayout({ currentUser }) {
     const { filterType = 'active' } = useParams();
     const navigate = useNavigate();
 
-    const [sidebarCounts, setSidebarCounts] = useState({ active: 0, archived: 0, needs_agent: 0, blocked: 0 });
+    // PASO 1: Crear Estado para los Contadores en el componente padre común.
+    const [unreadFilterCounts, setUnreadFilterCounts] = useState({ active: 0, needs_agent: 0, archived: 0, blocked: 0 });
 
-    const handleSidebarCountsChange = useCallback((newCounts) => {
-        setSidebarCounts(currentCounts => {
-            if (JSON.stringify(currentCounts) === JSON.stringify(newCounts)) {
-                return currentCounts;
+    // PASO 1: Crear una Función de Callback para que el hijo actualice el estado del padre.
+    const handleCountersUpdate = useCallback((counts) => {
+        setUnreadFilterCounts(currentCounts => {
+            if (JSON.stringify(currentCounts) !== JSON.stringify(counts)) {
+                return counts;
             }
-            return newCounts;
+            return currentCounts;
         });
     }, []);
 
@@ -51,14 +114,11 @@ function DashboardLayout({ currentUser }) {
         navigate(`/filter/${newFilter}`);
     };
 
-    // La barra lateral de íconos ahora se renderiza incondicionalmente para la versión de escritorio,
-    // pero la de móvil se renderiza al final para que quede sobre el contenido si es necesario.
-    // El DashboardPage ahora recibe `isMobile` y `filterType` para controlar su propio layout.
     const mainLayoutStyle = { display: 'flex', height: '100vh', flexDirection: isMobile ? 'column' : 'row' };
     const contentStyle = { flexGrow: 1, overflow: 'hidden', height: '100%' };
-    // Padding-bottom en móvil para dejar espacio para la barra de navegación inferior
+    
     if (isMobile) {
-        contentStyle.paddingBottom = '60px'; 
+        contentStyle.paddingBottom = '60px'; // Espacio para la barra de nav móvil
     }
 
     return (
@@ -68,16 +128,16 @@ function DashboardLayout({ currentUser }) {
                     currentFilter={filterType}
                     onChangeFilter={handleFilterChange}
                     onLogout={handleLogout}
-                    filterCounts={sidebarCounts}
+                    filterCounts={unreadFilterCounts} // PASO 1: Pasa el estado al sidebar
                     isMobile={isMobile}
                 />
             )}
             <main style={contentStyle}>
                 <DashboardPage
                     currentUser={currentUser}
-                    onCountsChange={handleSidebarCountsChange}
-                    isMobile={isMobile} // Se pasa la prop
-                    filterType={filterType} // Se pasa la prop
+                    onCountersUpdate={handleCountersUpdate} // PASO 1: Pasa la función de callback al dashboard
+                    isMobile={isMobile}
+                    filterType={filterType}
                 />
             </main>
             {isMobile && (
@@ -85,7 +145,7 @@ function DashboardLayout({ currentUser }) {
                     currentFilter={filterType}
                     onChangeFilter={handleFilterChange}
                     onLogout={handleLogout}
-                    filterCounts={sidebarCounts}
+                    filterCounts={unreadFilterCounts} // PASO 1: Pasa el estado al sidebar (móvil)
                     isMobile={isMobile}
                 />
             )}
