@@ -9,7 +9,7 @@ import {
     updateSessionStatus,
     setPinStatus,
     archiveSession,
-unarchiveSession,
+    unarchiveSession,
     blockSession,
     unblockSession
 } from './supabaseClient';
@@ -53,78 +53,33 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
     useEffect(() => { try { if (Object.keys(sessionStatuses).length > 0) localStorage.setItem('cachedStatuses', JSON.stringify(sessionStatuses)); } catch (e) {} }, [sessionStatuses]);
     useEffect(() => { try { if (Object.keys(contacts).length > 0) localStorage.setItem('cachedContacts', JSON.stringify(contacts)); } catch (e) {} }, [contacts]);
     useEffect(() => { try { localStorage.setItem('lastSelectedByFilter', JSON.stringify(lastSelectedByFilter)); } catch (e) {} }, [lastSelectedByFilter]);
+    useEffect(() => { if (sessionIdFromUrl) { setSelectedSessionId(sessionIdFromUrl); setLastSelectedByFilter(prev => ({ ...prev, [filterType]: sessionIdFromUrl })); } else { setSelectedSessionId(null); } }, [sessionIdFromUrl, filterType]);
     
-    useEffect(() => { 
-        if (sessionIdFromUrl) {
-            setSelectedSessionId(sessionIdFromUrl);
-            setLastSelectedByFilter(prev => ({ ...prev, [filterType]: sessionIdFromUrl }));
-        } else {
-            setSelectedSessionId(null);
-        }
-    }, [sessionIdFromUrl, filterType]);
-
     const formatInteractionData = useCallback((item) => ({ id: item.id, sessionId: item.session_id, type: item.message?.type || 'unknown', content: item.message?.content || 'Mensaje vacío', time: item.time, isAgentMessage: item.sent_by_agent || false, status: item.status || 'entregado' }), []);
+    const processInteractions = useCallback((interactionsArray) => { if (!interactionsArray || interactionsArray.length === 0) { return {}; } const formattedAndSorted = [...interactionsArray].map(item => (typeof item.isAgentMessage !== 'undefined' ? item : formatInteractionData(item))).sort((a, b) => new Date(a.time) - new Date(b.time)); const groupedBySession = formattedAndSorted.reduce((acc, interaction) => { const sid = interaction.sessionId; if (!acc[sid]) { acc[sid] = { messages: [], lastMessageTime: 0 }; } acc[sid].messages.push(interaction); const timeMs = new Date(interaction.time).getTime(); if (!isNaN(timeMs)) { acc[sid].lastMessageTime = Math.max(acc[sid].lastMessageTime, timeMs); } return acc; }, {}); const sortedEntries = Object.entries(groupedBySession).sort(([, a], [, b]) => b.lastMessageTime - a.lastMessageTime); const finalGrouped = sortedEntries.reduce((obj, [sid, data]) => { obj[sid] = data.messages; return obj; }, {}); return finalGrouped; }, [formatInteractionData]);
+    const initialLoad = useCallback(async (isMountedRef) => { if (!currentUser || !currentUser.id) { if (isMountedRef.current) setIsLoading(false); return; } if (isMountedRef.current) setIsLoading(true); try { const [rawHistory, contactList] = await Promise.all([ getChatHistory(null, 200), getContacts() ]); if (!isMountedRef.current) return; const contactsMap = contactList.reduce((acc, contact) => { acc[contact.phone_number] = contact.display_name; return acc; }, {}); if (isMountedRef.current) setContacts(contactsMap); const initialGrouped = processInteractions(rawHistory || []); if (isMountedRef.current) setGroupedInteractions(initialGrouped); if (initialGrouped && Object.keys(initialGrouped).length > 0) { const sessionIds = Object.keys(initialGrouped); const newStatusesFetchPromises = sessionIds.map(id => getSessionStatus(id)); const resolvedStatuses = await Promise.all(newStatusesFetchPromises); if (!isMountedRef.current) return; const newStatusesObject = resolvedStatuses.reduce((acc, statusData) => { if (statusData && statusData.session_id) { acc[statusData.session_id] = statusData; } return acc; }, {}); setSessionStatuses(newStatusesObject); } else { setSessionStatuses({}); } } catch (err) { console.error("[DashboardPage] Error en initialLoad:", err); } finally { if (isMountedRef.current) setIsLoading(false); } }, [currentUser, processInteractions]);
     
-    const processInteractions = useCallback((interactionsArray) => {
-        if (!interactionsArray || interactionsArray.length === 0) { return {}; }
-        const formattedAndSorted = [...interactionsArray].map(item => (typeof item.isAgentMessage !== 'undefined' ? item : formatInteractionData(item))).sort((a, b) => new Date(a.time) - new Date(b.time));
-        const groupedBySession = formattedAndSorted.reduce((acc, interaction) => {
-            const sid = interaction.sessionId;
-            if (!acc[sid]) { acc[sid] = { messages: [], lastMessageTime: 0 }; }
-            acc[sid].messages.push(interaction);
-            const timeMs = new Date(interaction.time).getTime();
-            if (!isNaN(timeMs)) { acc[sid].lastMessageTime = Math.max(acc[sid].lastMessageTime, timeMs); }
-            return acc;
-        }, {});
-        const sortedEntries = Object.entries(groupedBySession).sort(([, a], [, b]) => b.lastMessageTime - a.lastMessageTime);
-        const finalGrouped = sortedEntries.reduce((obj, [sid, data]) => { obj[sid] = data.messages; return obj; }, {});
-        return finalGrouped;
-    }, [formatInteractionData]);
-
-    const initialLoad = useCallback(async (isMountedRef) => {
-        if (!currentUser || !currentUser.id) {
-            if (isMountedRef.current) setIsLoading(false);
-            return;
-        }
-        if (isMountedRef.current) setIsLoading(true);
-        try {
-            const [rawHistory, contactList] = await Promise.all([getChatHistory(null, 200), getContacts()]);
-            if (!isMountedRef.current) return;
-            const contactsMap = contactList.reduce((acc, contact) => { acc[contact.phone_number] = contact.display_name; return acc; }, {});
-            if (isMountedRef.current) setContacts(contactsMap);
-            const initialGrouped = processInteractions(rawHistory || []);
-            if (isMountedRef.current) setGroupedInteractions(initialGrouped);
-            if (initialGrouped && Object.keys(initialGrouped).length > 0) {
-                const sessionIds = Object.keys(initialGrouped);
-                const newStatusesFetchPromises = sessionIds.map(id => getSessionStatus(id));
-                const resolvedStatuses = await Promise.all(newStatusesFetchPromises);
-                if (!isMountedRef.current) return;
-                const newStatusesObject = resolvedStatuses.reduce((acc, statusData) => {
-                    if (statusData && statusData.session_id) {
-                        acc[statusData.session_id] = statusData;
-                    }
-                    return acc;
-                }, {});
-                setSessionStatuses(newStatusesObject);
-            } else {
-                setSessionStatuses({});
-            }
-        } catch (err) {
-            console.error("[DashboardPage] Error en initialLoad:", err);
-        } finally {
-            if (isMountedRef.current) setIsLoading(false);
-        }
-    }, [currentUser, processInteractions]);
+    useEffect(() => { const isMountedRef = { current: true }; if (currentUser && currentUser.id) initialLoad(isMountedRef); else setIsLoading(false); return () => { isMountedRef.current = false; }; }, [currentUser, initialLoad]);
     
     useEffect(() => {
-        const isMountedRef = { current: true };
-        if (currentUser && currentUser.id) {
-            initialLoad(isMountedRef);
-        } else {
-            setIsLoading(false);
+        if (selectedSessionId && Object.keys(sessionStatuses).length > 0) {
+            const sessionStatus = sessionStatuses[selectedSessionId]?.status;
+            if (!sessionStatus) return;
+            const isSessionValidForFilter = (filter, status) => {
+                switch (filter) {
+                    case 'active': return status !== SESSION_STATUS.ARCHIVED && status !== SESSION_STATUS.BLOCKED && status !== SESSION_STATUS.NEEDS_AGENT;
+                    case 'archived': return status === SESSION_STATUS.ARCHIVED;
+                    case 'blocked': return status === SESSION_STATUS.BLOCKED;
+                    case 'needs_agent': return status === SESSION_STATUS.NEEDS_AGENT;
+                    default: return false;
+                }
+            };
+            if (!isSessionValidForFilter(filterType, sessionStatus)) {
+                setSelectedSessionId(null);
+                navigate(`/filter/${filterType}`, { replace: true });
+            }
         }
-        return () => { isMountedRef.current = false; };
-    }, [currentUser, initialLoad]);
+    }, [filterType, selectedSessionId, sessionStatuses, navigate]);
     
     useEffect(() => {
         const isMountedRef = { current: true };
@@ -135,6 +90,7 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
             const updatedData = payload.new;
             if (!updatedData || !updatedData.session_id) return;
             const newOrUpdatedInteraction = formatInteractionData(updatedData);
+
             setGroupedInteractions(prevGroups => {
                 const allMessages = Object.values(prevGroups).flat();
                 const existingIndex = allMessages.findIndex(m => m.id === newOrUpdatedInteraction.id);
@@ -146,11 +102,12 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
                 return processInteractions(allMessages);
             });
         };
-
         const historyChannelName = `agent-hist-${currentUser.id.slice(0, 8)}`;
         const statusChannelName = `agent-stat-${currentUser.id.slice(0, 8)}`;
 
-        const historySubscription = supabase.channel(historyChannelName)
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Se eliminan las constantes `historySubscription` y `statusSubscription`
+        supabase.channel(historyChannelName)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'n8n_chat_histories' }, async (payload) => {
                 handleIncomingUpdate(payload);
                 const newInteraction = formatInteractionData(payload.new);
@@ -167,7 +124,7 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'n8n_chat_histories' }, handleIncomingUpdate)
             .subscribe();
 
-        const statusSubscription = supabase.channel(statusChannelName)
+        supabase.channel(statusChannelName)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_sessions_state' }, (payload) => {
                 if (!isMountedRef.current) return;
                 const changedSessionId = payload.new?.session_id || payload.old?.session_id;
@@ -194,6 +151,7 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
                 supabase.removeAllChannels();
             }
         };
+        // --- FIN DE LA CORRECCIÓN ---
     }, [currentUser, formatInteractionData, processInteractions]);
 
     useEffect(() => {
@@ -214,25 +172,6 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
             onCountersUpdate(newCounts);
         }
     }, [unreadCounts, sessionStatuses, onCountersUpdate]);
-
-    useEffect(() => {
-        if (selectedSessionId && Object.keys(sessionStatuses).length > 0) {
-            const sessionStatus = sessionStatuses[selectedSessionId]?.status;
-            if (!sessionStatus) return;
-            const isSessionValidForFilter = (filter, status) => {
-                switch (filter) {
-                    case 'active': return status !== SESSION_STATUS.ARCHIVED && status !== SESSION_STATUS.BLOCKED && status !== SESSION_STATUS.NEEDS_AGENT;
-                    case 'archived': return status === SESSION_STATUS.ARCHIVED;
-                    case 'blocked': return status === SESSION_STATUS.BLOCKED;
-                    case 'needs_agent': return status === SESSION_STATUS.NEEDS_AGENT;
-                    default: return false;
-                }
-            };
-            if (!isSessionValidForFilter(filterType, sessionStatus)) {
-                navigate(`/filter/${filterType}`, { replace: true });
-            }
-        }
-    }, [filterType, selectedSessionId, sessionStatuses, navigate]);
 
     const handleSelectSession = useCallback(async (sessionId) => {
         const sessionData = sessionStatusesRef.current[sessionId];
@@ -265,12 +204,7 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
         }
     }, [filterType, currentUser, openContextMenuForSessionId, navigate]);
     
-    const handleActionThatRemovesChat = useCallback((sessionId, filterToClear) => {
-        if (selectedSessionIdRef.current === sessionId) {
-            setLastSelectedByFilter(prev => { const newState = { ...prev }; delete newState[filterToClear]; return newState; });
-            navigate(`/filter/${filterType}`);
-        }
-    }, [navigate, filterType]);
+    const handleActionThatRemovesChat = useCallback((sessionId, filterToClear) => { if (selectedSessionIdRef.current === sessionId) { setLastSelectedByFilter(prev => { const newState = { ...prev }; delete newState[filterToClear]; return newState; }); navigate(`/filter/${filterType}`); } }, [navigate, filterType]);
     
     const handleArchiveSession = useCallback(async (sessionId) => {
         handleActionThatRemovesChat(sessionId, 'active');
@@ -368,7 +302,7 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
                 ) : (
                     !isMobile && (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: colors.textSec, fontSize: '1.2em', padding: '20px', textAlign: 'center' }}>
-                            {(isLoading && Object.keys(groupedInteractions).length === 0) ? 'Sincronizando chats...' : 'Selecciona un chat para comenzar.'}
+                           {(isLoading && Object.keys(groupedInteractions).length === 0) ? 'Sincronizando chats...' : 'Selecciona un chat para comenzar.'}
                         </div>
                     )
                 )}
