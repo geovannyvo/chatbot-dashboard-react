@@ -9,7 +9,7 @@ import {
     updateSessionStatus,
     setPinStatus,
     archiveSession,
-    unarchiveSession,
+unarchiveSession,
     blockSession,
     unblockSession
 } from './supabaseClient';
@@ -29,11 +29,7 @@ const getCachedData = (key, defaultValue = {}) => {
     }
 };
 
-// --- INICIO DE LA MODIFICACIÓN ---
-// PASO 2: Recibir la Prop de Callback 'onCountersUpdate'
 function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) {
-// --- FIN DE LA MODIFICACIÓN ---
-
     const { sessionId: sessionIdFromUrl } = useParams();
     const navigate = useNavigate();
 
@@ -57,68 +53,272 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
     useEffect(() => { try { if (Object.keys(sessionStatuses).length > 0) localStorage.setItem('cachedStatuses', JSON.stringify(sessionStatuses)); } catch (e) {} }, [sessionStatuses]);
     useEffect(() => { try { if (Object.keys(contacts).length > 0) localStorage.setItem('cachedContacts', JSON.stringify(contacts)); } catch (e) {} }, [contacts]);
     useEffect(() => { try { localStorage.setItem('lastSelectedByFilter', JSON.stringify(lastSelectedByFilter)); } catch (e) {} }, [lastSelectedByFilter]);
-    useEffect(() => { if (sessionIdFromUrl) { setSelectedSessionId(sessionIdFromUrl); setLastSelectedByFilter(prev => ({ ...prev, [filterType]: sessionIdFromUrl })); } else { setSelectedSessionId(null); } }, [sessionIdFromUrl, filterType]);
-    useEffect(() => { if (!isMobile && !sessionIdFromUrl) { const lastSelected = lastSelectedByFilter[filterType]; if (lastSelected && sessionStatuses[lastSelected]) { navigate(`/filter/${filterType}/chats/${lastSelected}`, { replace: true }); } } }, [isMobile, filterType, sessionIdFromUrl, lastSelectedByFilter, sessionStatuses, navigate]);
     
-    const formatInteractionData = useCallback((item) => ({ id: item.id, sessionId: item.session_id, type: item.message?.type || 'unknown', content: item.message?.content || 'Mensaje vacío', time: item.time, isAgentMessage: item.sent_by_agent || false, status: item.status || 'entregado' }), []);
-    const processInteractions = useCallback((interactionsArray) => { if (!interactionsArray || interactionsArray.length === 0) { return {}; } const formattedAndSorted = [...interactionsArray].map(item => (typeof item.isAgentMessage !== 'undefined' ? item : formatInteractionData(item))).sort((a, b) => new Date(a.time) - new Date(b.time)); const groupedBySession = formattedAndSorted.reduce((acc, interaction) => { const sid = interaction.sessionId; if (!acc[sid]) { acc[sid] = { messages: [], lastMessageTime: 0 }; } acc[sid].messages.push(interaction); const timeMs = new Date(interaction.time).getTime(); if (!isNaN(timeMs)) { acc[sid].lastMessageTime = Math.max(acc[sid].lastMessageTime, timeMs); } return acc; }, {}); const sortedEntries = Object.entries(groupedBySession).sort(([, a], [, b]) => b.lastMessageTime - a.lastMessageTime); const finalGrouped = sortedEntries.reduce((obj, [sid, data]) => { obj[sid] = data.messages; return obj; }, {}); return finalGrouped; }, [formatInteractionData]);
-    const initialLoad = useCallback(async (isMountedRef) => { if (!currentUser || !currentUser.id) { if (isMountedRef.current) setIsLoading(false); return; } if (isMountedRef.current) setIsLoading(true); try { const [rawHistory, contactList] = await Promise.all([ getChatHistory(null, 200), getContacts() ]); if (!isMountedRef.current) return; const contactsMap = contactList.reduce((acc, contact) => { acc[contact.phone_number] = contact.display_name; return acc; }, {}); if (isMountedRef.current) setContacts(contactsMap); const initialGrouped = processInteractions(rawHistory || []); if (isMountedRef.current) setGroupedInteractions(initialGrouped); if (initialGrouped && Object.keys(initialGrouped).length > 0) { const sessionIds = Object.keys(initialGrouped); const newStatusesFetchPromises = sessionIds.map(id => getSessionStatus(id)); const resolvedStatuses = await Promise.all(newStatusesFetchPromises); if (!isMountedRef.current) return; const newStatusesObject = resolvedStatuses.reduce((acc, statusData) => { if (statusData && statusData.session_id) { acc[statusData.session_id] = statusData; } return acc; }, {}); setSessionStatuses(newStatusesObject); } else { setSessionStatuses({}); } } catch (err) { console.error("[DashboardPage] Error en initialLoad:", err); } finally { if (isMountedRef.current) setIsLoading(false); } }, [currentUser, processInteractions]);
-    
-    useEffect(() => { const isMountedRef = { current: true }; if (currentUser && currentUser.id) initialLoad(isMountedRef); else setIsLoading(false); return () => { isMountedRef.current = false; }; }, [currentUser, initialLoad]);
-    useEffect(() => { const isMountedRef = { current: true }; if (!currentUser || !currentUser.id || !supabase) return; const handleIncomingUpdate = (payload) => { if (!isMountedRef.current) return; const updatedData = payload.new; if (!updatedData || !updatedData.session_id) return; const newOrUpdatedInteraction = formatInteractionData(updatedData); setGroupedInteractions(prevGroups => { const allMessages = Object.values(prevGroups).flat(); const existingIndex = allMessages.findIndex(m => m.id === newOrUpdatedInteraction.id); if (existingIndex > -1) { allMessages[existingIndex] = newOrUpdatedInteraction; } else { allMessages.push(newOrUpdatedInteraction); } return processInteractions(allMessages); }); }; const historyChannelName = `agent-hist-${currentUser.id.slice(0, 8)}`; const statusChannelName = `agent-stat-${currentUser.id.slice(0, 8)}`; const historySubscription = supabase.channel(historyChannelName).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'n8n_chat_histories' }, async (payload) => { handleIncomingUpdate(payload); const newInteraction = formatInteractionData(payload.new); const currentSelected = selectedSessionIdRef.current; const sessionStatus = sessionStatusesRef.current[newInteraction.sessionId]?.status; if (newInteraction.sessionId !== currentSelected && sessionStatus !== SESSION_STATUS.BLOCKED) { setUnreadCounts(prev => ({ ...prev, [newInteraction.sessionId]: (prev[newInteraction.sessionId] || 0) + 1 })); } if (!sessionStatusesRef.current[newInteraction.sessionId]) { const newStatus = await getSessionStatus(newInteraction.sessionId); if (isMountedRef.current) setSessionStatuses(prev => ({ ...prev, [newInteraction.sessionId]: newStatus })); } }).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'n8n_chat_histories' }, handleIncomingUpdate).subscribe(); const statusSubscription = supabase.channel(statusChannelName).on('postgres_changes', { event: '*', schema: 'public', table: 'chat_sessions_state' }, (payload) => { if (!isMountedRef.current) return; const changedSessionId = payload.new?.session_id || payload.old?.session_id; if (changedSessionId) { if (payload.eventType === 'DELETE') { setSessionStatuses(prev => { const newSt = { ...prev }; delete newSt[changedSessionId]; return newSt; }); if (selectedSessionIdRef.current === changedSessionId) setSelectedSessionId(null); } else if (payload.new) { setSessionStatuses(prev => ({ ...prev, [changedSessionId]: { ...(prev[changedSessionId] || {}), ...payload.new } })); } } }).subscribe(); return () => { isMountedRef.current = false; if (supabase) { supabase.removeChannel(historySubscription).catch(err => console.error("Error al remover canal historial:", err)); supabase.removeChannel(statusSubscription).catch(err => console.error("Error al remover canal estado:", err)); } }; }, [currentUser, formatInteractionData, processInteractions]);
+    useEffect(() => { 
+        if (sessionIdFromUrl) {
+            setSelectedSessionId(sessionIdFromUrl);
+            setLastSelectedByFilter(prev => ({ ...prev, [filterType]: sessionIdFromUrl }));
+        } else {
+            setSelectedSessionId(null);
+        }
+    }, [sessionIdFromUrl, filterType]);
 
-    // --- INICIO DE LA MODIFICACIÓN ---
-    // PASO 2: Calcular y Notificar al Padre usando un useEffect.
+    const formatInteractionData = useCallback((item) => ({ id: item.id, sessionId: item.session_id, type: item.message?.type || 'unknown', content: item.message?.content || 'Mensaje vacío', time: item.time, isAgentMessage: item.sent_by_agent || false, status: item.status || 'entregado' }), []);
+    
+    const processInteractions = useCallback((interactionsArray) => {
+        if (!interactionsArray || interactionsArray.length === 0) { return {}; }
+        const formattedAndSorted = [...interactionsArray].map(item => (typeof item.isAgentMessage !== 'undefined' ? item : formatInteractionData(item))).sort((a, b) => new Date(a.time) - new Date(b.time));
+        const groupedBySession = formattedAndSorted.reduce((acc, interaction) => {
+            const sid = interaction.sessionId;
+            if (!acc[sid]) { acc[sid] = { messages: [], lastMessageTime: 0 }; }
+            acc[sid].messages.push(interaction);
+            const timeMs = new Date(interaction.time).getTime();
+            if (!isNaN(timeMs)) { acc[sid].lastMessageTime = Math.max(acc[sid].lastMessageTime, timeMs); }
+            return acc;
+        }, {});
+        const sortedEntries = Object.entries(groupedBySession).sort(([, a], [, b]) => b.lastMessageTime - a.lastMessageTime);
+        const finalGrouped = sortedEntries.reduce((obj, [sid, data]) => { obj[sid] = data.messages; return obj; }, {});
+        return finalGrouped;
+    }, [formatInteractionData]);
+
+    const initialLoad = useCallback(async (isMountedRef) => {
+        if (!currentUser || !currentUser.id) {
+            if (isMountedRef.current) setIsLoading(false);
+            return;
+        }
+        if (isMountedRef.current) setIsLoading(true);
+        try {
+            const [rawHistory, contactList] = await Promise.all([getChatHistory(null, 200), getContacts()]);
+            if (!isMountedRef.current) return;
+            const contactsMap = contactList.reduce((acc, contact) => { acc[contact.phone_number] = contact.display_name; return acc; }, {});
+            if (isMountedRef.current) setContacts(contactsMap);
+            const initialGrouped = processInteractions(rawHistory || []);
+            if (isMountedRef.current) setGroupedInteractions(initialGrouped);
+            if (initialGrouped && Object.keys(initialGrouped).length > 0) {
+                const sessionIds = Object.keys(initialGrouped);
+                const newStatusesFetchPromises = sessionIds.map(id => getSessionStatus(id));
+                const resolvedStatuses = await Promise.all(newStatusesFetchPromises);
+                if (!isMountedRef.current) return;
+                const newStatusesObject = resolvedStatuses.reduce((acc, statusData) => {
+                    if (statusData && statusData.session_id) {
+                        acc[statusData.session_id] = statusData;
+                    }
+                    return acc;
+                }, {});
+                setSessionStatuses(newStatusesObject);
+            } else {
+                setSessionStatuses({});
+            }
+        } catch (err) {
+            console.error("[DashboardPage] Error en initialLoad:", err);
+        } finally {
+            if (isMountedRef.current) setIsLoading(false);
+        }
+    }, [currentUser, processInteractions]);
+    
+    useEffect(() => {
+        const isMountedRef = { current: true };
+        if (currentUser && currentUser.id) {
+            initialLoad(isMountedRef);
+        } else {
+            setIsLoading(false);
+        }
+        return () => { isMountedRef.current = false; };
+    }, [currentUser, initialLoad]);
+    
+    useEffect(() => {
+        const isMountedRef = { current: true };
+        if (!currentUser || !currentUser.id || !supabase) return;
+
+        const handleIncomingUpdate = (payload) => {
+            if (!isMountedRef.current) return;
+            const updatedData = payload.new;
+            if (!updatedData || !updatedData.session_id) return;
+            const newOrUpdatedInteraction = formatInteractionData(updatedData);
+            setGroupedInteractions(prevGroups => {
+                const allMessages = Object.values(prevGroups).flat();
+                const existingIndex = allMessages.findIndex(m => m.id === newOrUpdatedInteraction.id);
+                if (existingIndex > -1) {
+                    allMessages[existingIndex] = newOrUpdatedInteraction;
+                } else {
+                    allMessages.push(newOrUpdatedInteraction);
+                }
+                return processInteractions(allMessages);
+            });
+        };
+
+        const historyChannelName = `agent-hist-${currentUser.id.slice(0, 8)}`;
+        const statusChannelName = `agent-stat-${currentUser.id.slice(0, 8)}`;
+
+        const historySubscription = supabase.channel(historyChannelName)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'n8n_chat_histories' }, async (payload) => {
+                handleIncomingUpdate(payload);
+                const newInteraction = formatInteractionData(payload.new);
+                const currentSelected = selectedSessionIdRef.current;
+                const sessionStatus = sessionStatusesRef.current[newInteraction.sessionId]?.status;
+                if (newInteraction.sessionId !== currentSelected && sessionStatus !== SESSION_STATUS.BLOCKED) {
+                    setUnreadCounts(prev => ({ ...prev, [newInteraction.sessionId]: (prev[newInteraction.sessionId] || 0) + 1 }));
+                }
+                if (!sessionStatusesRef.current[newInteraction.sessionId]) {
+                    const newStatus = await getSessionStatus(newInteraction.sessionId);
+                    if (isMountedRef.current) setSessionStatuses(prev => ({ ...prev, [newInteraction.sessionId]: newStatus }));
+                }
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'n8n_chat_histories' }, handleIncomingUpdate)
+            .subscribe();
+
+        const statusSubscription = supabase.channel(statusChannelName)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_sessions_state' }, (payload) => {
+                if (!isMountedRef.current) return;
+                const changedSessionId = payload.new?.session_id || payload.old?.session_id;
+                if (changedSessionId) {
+                    if (payload.eventType === 'DELETE') {
+                        setSessionStatuses(prev => { const newSt = { ...prev }; delete newSt[changedSessionId]; return newSt; });
+                        if (selectedSessionIdRef.current === changedSessionId) setSelectedSessionId(null);
+                    } else if (payload.new) {
+                        const oldStatus = sessionStatusesRef.current[changedSessionId]?.status;
+                        const newStatus = payload.new.status;
+                        setSessionStatuses(prev => ({ ...prev, [changedSessionId]: { ...(prev[changedSessionId] || {}), ...payload.new } }));
+                        if (newStatus === SESSION_STATUS.NEEDS_AGENT && oldStatus !== newStatus) {
+                            if (changedSessionId !== selectedSessionIdRef.current) {
+                                setUnreadCounts(prev => ({ ...prev, [changedSessionId]: (prev[changedSessionId] || 0) + 1 }));
+                            }
+                        }
+                    }
+                }
+            }).subscribe();
+        
+        return () => {
+            isMountedRef.current = false;
+            if (supabase) {
+                supabase.removeAllChannels();
+            }
+        };
+    }, [currentUser, formatInteractionData, processInteractions]);
+
     useEffect(() => {
         const calculateFilterCounts = () => {
-            const counts = {
-                active: 0,
-                needs_agent: 0,
-                archived: 0,
-                blocked: 0
-            };
-    
-            // Itera solo sobre las sesiones que tienen mensajes no leídos para ser más eficiente.
+            const counts = { active: 0, needs_agent: 0, archived: 0, blocked: 0 };
             const unreadSessionIds = Object.keys(unreadCounts).filter(id => unreadCounts[id] > 0);
-    
             for (const sessionId of unreadSessionIds) {
                 const status = sessionStatuses[sessionId]?.status;
-                
-                if (status === SESSION_STATUS.BOT_ACTIVE || status === SESSION_STATUS.AGENT_ACTIVE) {
-                    counts.active += 1;
-                } else if (status === SESSION_STATUS.NEEDS_AGENT) {
-                    counts.needs_agent += 1;
-                } else if (status === SESSION_STATUS.ARCHIVED) {
-                    counts.archived += 1;
-                } else if (status === SESSION_STATUS.BLOCKED) {
-                    counts.blocked += 1;
-                }
+                if (status === SESSION_STATUS.BOT_ACTIVE || status === SESSION_STATUS.AGENT_ACTIVE) { counts.active += 1; } 
+                else if (status === SESSION_STATUS.NEEDS_AGENT) { counts.needs_agent += 1; } 
+                else if (status === SESSION_STATUS.ARCHIVED) { counts.archived += 1; } 
+                else if (status === SESSION_STATUS.BLOCKED) { counts.blocked += 1; }
             }
             return counts;
         };
-    
         const newCounts = calculateFilterCounts();
-        
-        // Invoca la función de callback del padre si existe.
         if (onCountersUpdate) {
             onCountersUpdate(newCounts);
         }
-    }, [unreadCounts, sessionStatuses, onCountersUpdate]); // Dependencias: se ejecuta si cambian los no leídos, los estados o la función de callback.
-    // --- FIN DE LA MODIFICACIÓN ---
+    }, [unreadCounts, sessionStatuses, onCountersUpdate]);
 
-    const handleSelectSession = useCallback(async (sessionId) => { const sessionData = sessionStatusesRef.current[sessionId]; const currentFilter = filterType || 'active'; if (!sessionData) return; if (currentFilter === 'needs_agent' && sessionData.status === SESSION_STATUS.NEEDS_AGENT) { if (!currentUser || !currentUser.id) { toast.error("Error: No se pudo identificar al agente."); return; } const success = await updateSessionStatus(sessionId, SESSION_STATUS.AGENT_ACTIVE, currentUser.id); if (success) { setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...(prev[sessionId] || {}), status: SESSION_STATUS.AGENT_ACTIVE, agent_id: currentUser.id } })); navigate(`/filter/active/chats/${sessionId}`); } else { toast.error(`Error al tomar el chat.`); } return; } if (currentFilter === 'active' && (sessionData.status === SESSION_STATUS.ARCHIVED || sessionData.status === SESSION_STATUS.BLOCKED || sessionData.status === SESSION_STATUS.NEEDS_AGENT)) { return; } if (currentFilter === 'archived' && sessionData.status !== SESSION_STATUS.ARCHIVED) { return; } if (currentFilter === 'blocked' && sessionData.status !== SESSION_STATUS.BLOCKED) { return; } navigate(`/filter/${currentFilter}/chats/${sessionId}`); setUnreadCounts(prevCounts => { if (prevCounts[sessionId] > 0) { const newCounts = { ...prevCounts }; newCounts[sessionId] = 0; return newCounts; } return prevCounts; }); if (openContextMenuForSessionId === sessionId) setOpenContextMenuForSessionId(null); }, [filterType, currentUser, openContextMenuForSessionId, navigate]);
-    const handleActionThatRemovesChat = useCallback((sessionId, filterToClear) => { if (selectedSessionIdRef.current === sessionId) { setLastSelectedByFilter(prev => { const newState = { ...prev }; delete newState[filterToClear]; return newState; }); navigate(`/filter/${filterType}`); } }, [navigate, filterType]);
-    const handleArchiveSession = useCallback(async (sessionId) => { handleActionThatRemovesChat(sessionId, 'active'); const success = await archiveSession(sessionId); if (!success) toast.error("Error al archivar chat"); }, [handleActionThatRemovesChat]);
-    const handleBlockSession = useCallback(async (sessionId) => { handleActionThatRemovesChat(sessionId, filterType); const success = await blockSession(sessionId, currentUser.id); if (!success) toast.error("Error al bloquear chat"); }, [currentUser, filterType, handleActionThatRemovesChat]);
+    useEffect(() => {
+        if (selectedSessionId && Object.keys(sessionStatuses).length > 0) {
+            const sessionStatus = sessionStatuses[selectedSessionId]?.status;
+            if (!sessionStatus) return;
+            const isSessionValidForFilter = (filter, status) => {
+                switch (filter) {
+                    case 'active': return status !== SESSION_STATUS.ARCHIVED && status !== SESSION_STATUS.BLOCKED && status !== SESSION_STATUS.NEEDS_AGENT;
+                    case 'archived': return status === SESSION_STATUS.ARCHIVED;
+                    case 'blocked': return status === SESSION_STATUS.BLOCKED;
+                    case 'needs_agent': return status === SESSION_STATUS.NEEDS_AGENT;
+                    default: return false;
+                }
+            };
+            if (!isSessionValidForFilter(filterType, sessionStatus)) {
+                navigate(`/filter/${filterType}`, { replace: true });
+            }
+        }
+    }, [filterType, selectedSessionId, sessionStatuses, navigate]);
+
+    const handleSelectSession = useCallback(async (sessionId) => {
+        const sessionData = sessionStatusesRef.current[sessionId];
+        const currentFilter = filterType || 'active';
+        if (currentFilter === 'needs_agent' && sessionData?.status === SESSION_STATUS.NEEDS_AGENT) {
+            if (!currentUser || !currentUser.id) {
+                toast.error("Error: No se pudo identificar al agente.");
+                return;
+            }
+            const success = await updateSessionStatus(sessionId, SESSION_STATUS.AGENT_ACTIVE, currentUser.id);
+            if (success) {
+                setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...(prev[sessionId] || {}), status: SESSION_STATUS.AGENT_ACTIVE, agent_id: currentUser.id } }));
+                navigate(`/filter/active/chats/${sessionId}`);
+            } else {
+                toast.error(`Error al tomar el chat.`);
+            }
+            return;
+        }
+        navigate(`/filter/${currentFilter}/chats/${sessionId}`);
+        setUnreadCounts(prevCounts => {
+            if (prevCounts[sessionId] > 0) {
+                const newCounts = { ...prevCounts };
+                delete newCounts[sessionId];
+                return newCounts;
+            }
+            return prevCounts;
+        });
+        if (openContextMenuForSessionId === sessionId) {
+            setOpenContextMenuForSessionId(null);
+        }
+    }, [filterType, currentUser, openContextMenuForSessionId, navigate]);
+    
+    const handleActionThatRemovesChat = useCallback((sessionId, filterToClear) => {
+        if (selectedSessionIdRef.current === sessionId) {
+            setLastSelectedByFilter(prev => { const newState = { ...prev }; delete newState[filterToClear]; return newState; });
+            navigate(`/filter/${filterType}`);
+        }
+    }, [navigate, filterType]);
+    
+    const handleArchiveSession = useCallback(async (sessionId) => {
+        handleActionThatRemovesChat(sessionId, 'active');
+        const success = await archiveSession(sessionId);
+        if (success) {
+            setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...(prev[sessionId] || {}), status: SESSION_STATUS.ARCHIVED } }));
+        } else {
+            toast.error("Error al archivar chat");
+        }
+    }, [handleActionThatRemovesChat]);
+
+    const handleUnarchiveSession = useCallback(async (sessionId) => {
+        handleActionThatRemovesChat(sessionId, 'archived');
+        const success = await unarchiveSession(sessionId);
+        if (success) {
+            setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...(prev[sessionId] || {}), status: SESSION_STATUS.BOT_ACTIVE } }));
+        } else {
+            toast.error("Error al desarchivar");
+        }
+    }, [handleActionThatRemovesChat]);
+
+    const handleBlockSession = useCallback(async (sessionId) => {
+        handleActionThatRemovesChat(sessionId, filterType);
+        const success = await blockSession(sessionId, currentUser.id);
+        if (success) {
+            setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...(prev[sessionId] || {}), status: SESSION_STATUS.BLOCKED } }));
+        } else {
+            toast.error("Error al bloquear chat");
+        }
+    }, [currentUser, filterType, handleActionThatRemovesChat]);
+
+    const handleUnblockSessionForContextMenu = useCallback(async (sessionId) => {
+        handleActionThatRemovesChat(sessionId, 'blocked');
+        const success = await unblockSession(sessionId);
+        if (success) {
+            setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...(prev[sessionId] || {}), status: SESSION_STATUS.BOT_ACTIVE } }));
+        } else {
+            toast.error("Error al desbloquear");
+        }
+    }, [handleActionThatRemovesChat]);
+
     const handleToggleContextMenu = useCallback((sessionId, event) => { if (event) event.stopPropagation(); setOpenContextMenuForSessionId(prev => (prev === sessionId ? null : sessionId)); }, []);
     const handleCloseContextMenu = useCallback(() => { setOpenContextMenuForSessionId(null); }, []);
     useEffect(() => { document.addEventListener('click', handleCloseContextMenu); return () => document.removeEventListener('click', handleCloseContextMenu); }, [handleCloseContextMenu]);
     const handleSearchChange = useCallback((term) => { setSearchTerm(term); }, []);
     const handleTogglePinSession = useCallback(async (sessionId) => { const currentSession = sessionStatusesRef.current[sessionId]; if (!currentSession || currentSession.status === SESSION_STATUS.ARCHIVED || currentSession.status === SESSION_STATUS.BLOCKED) return; const newPinStatus = !(currentSession.is_pinned || false); setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...prev[sessionId], is_pinned: newPinStatus } })); const success = await setPinStatus(sessionId, newPinStatus); if (!success) { toast.error('Error al cambiar estado de fijado.'); setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...prev[sessionId], is_pinned: currentSession.is_pinned } })); } }, []);
     const handleMarkAsUnread = useCallback((sessionId) => { const currentSessionData = sessionStatusesRef.current[sessionId]; const currentStatus = currentSessionData?.status; if (currentStatus === SESSION_STATUS.BLOCKED) { return; } setUnreadCounts(prevUnreadCounts => ({ ...prevUnreadCounts, [sessionId]: (prevUnreadCounts[sessionId] || 0) + 1 })); }, []);
-    const handleMarkAsRead = useCallback((sessionId) => { setUnreadCounts(prevCounts => { if (prevCounts[sessionId] > 0) { const newCounts = { ...prevCounts }; newCounts[sessionId] = 0; return newCounts; } return prevCounts; }); }, []);
-    const handleUnarchiveSession = useCallback(async (sessionId) => { const success = await unarchiveSession(sessionId); if (!success) toast.error("Error al desarchivar"); }, []);
-    const handleUnblockSessionForContextMenu = useCallback(async (sessionId) => { const success = await unblockSession(sessionId); if (!success) toast.error("Error al desbloquear"); }, []);
+    const handleMarkAsRead = useCallback((sessionId) => { setUnreadCounts(prevCounts => { if (prevCounts[sessionId] > 0) { const newCounts = { ...prevCounts }; delete newCounts[sessionId]; return newCounts; } return prevCounts; }); }, []);
 
     const listPanelStyle = { width: isMobile ? '100%' : '350px', display: isMobile && selectedSessionId ? 'none' : 'flex', flexDirection: 'column', height: '100%', backgroundColor: colors.bgMain, flexShrink: 0 };
     const chatPanelStyle = { display: isMobile && !selectedSessionId ? 'none' : 'flex', flexDirection: 'column', flexGrow: 1, backgroundColor: colors.bgSec };
@@ -168,7 +368,7 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
                 ) : (
                     !isMobile && (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: colors.textSec, fontSize: '1.2em', padding: '20px', textAlign: 'center' }}>
-                           {(isLoading && Object.keys(groupedInteractions).length === 0) ? 'Sincronizando chats...' : 'Selecciona un chat para comenzar.'}
+                            {(isLoading && Object.keys(groupedInteractions).length === 0) ? 'Sincronizando chats...' : 'Selecciona un chat para comenzar.'}
                         </div>
                     )
                 )}
