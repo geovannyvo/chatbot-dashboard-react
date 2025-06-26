@@ -55,7 +55,7 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
     
     const formatInteractionData = useCallback((item) => ({ id: item.id, sessionId: item.session_id, type: item.message?.type || 'unknown', content: item.message?.content || 'Mensaje vacío', time: item.time, isAgentMessage: item.sent_by_agent || false, status: item.status || 'entregado' }), []);
     const processInteractions = useCallback((interactionsArray) => { if (!interactionsArray || interactionsArray.length === 0) { return {}; } const formattedAndSorted = [...interactionsArray].map(item => (typeof item.isAgentMessage !== 'undefined' ? item : formatInteractionData(item))).sort((a, b) => new Date(a.time) - new Date(b.time)); const groupedBySession = formattedAndSorted.reduce((acc, interaction) => { const sid = interaction.sessionId; if (!acc[sid]) { acc[sid] = { messages: [], lastMessageTime: 0 }; } acc[sid].messages.push(interaction); const timeMs = new Date(interaction.time).getTime(); if (!isNaN(timeMs)) { acc[sid].lastMessageTime = Math.max(acc[sid].lastMessageTime, timeMs); } return acc; }, {}); const sortedEntries = Object.entries(groupedBySession).sort(([, a], [, b]) => b.lastMessageTime - a.lastMessageTime); const finalGrouped = sortedEntries.reduce((obj, [sid, data]) => { obj[sid] = data.messages; return obj; }, {}); return finalGrouped; }, [formatInteractionData]);
-    const initialLoad = useCallback(async (isMountedRef) => { if (!currentUser || !currentUser.id) { if (isMountedRef.current) setIsLoading(false); return; } if (isMountedRef.current) setIsLoading(true); try { const [rawHistory, contactList] = await Promise.all([ getChatHistory(null, 200), getContacts() ]); if (!isMountedRef.current) return; const contactsMap = contactList.reduce((acc, contact) => { acc[contact.phone_number] = contact.display_name; return acc; }, {}); if (isMountedRef.current) setContacts(contactsMap); const initialGrouped = processInteractions(rawHistory || []); if (isMountedRef.current) setGroupedInteractions(initialGrouped); if (initialGrouped && Object.keys(initialGrouped).length > 0) { const sessionIds = Object.keys(initialGrouped); const newStatusesFetchPromises = sessionIds.map(id => getSessionStatus(id)); const resolvedStatuses = await Promise.all(newStatusesFetchPromises); if (!isMountedRef.current) return; const newStatusesObject = resolvedStatuses.reduce((acc, statusData) => { if (statusData && statusData.session_id) { acc[statusData.session_id] = statusData; } return acc; }, {}); setSessionStatuses(newStatusesObject); } else { setSessionStatuses({}); } } catch (err) { console.error("[DashboardPage] Error en initialLoad:", err); } finally { if (isMountedRef.current) setIsLoading(false); } }, [currentUser, processInteractions]);
+    const initialLoad = useCallback(async (isMountedRef) => { if (!currentUser || !currentUser.id) { if (isMountedRef.current) setIsLoading(false); return; } if (isMountedRef.current) setIsLoading(true); try { const [rawHistory, contactList] = await Promise.all([ getChatHistory(null, 200), getContacts() ]); if (!isMountedRef.current) return; const contactsMap = contactList.reduce((acc, contact) => { acc[contact.phone_number] = contact.display_name; return acc; }, {}); if (isMountedRef.current) setContacts(contactsMap); const initialGrouped = processInteractions(rawHistory || []); if (isMountedRef.current) setGroupedInteractions(initialGrouped); if (initialGrouped && Object.keys(initialGrouped).length > 0) { const sessionIds = Object.keys(initialGrouped); const newStatusesFetchPromises = sessionIds.map(id => getSessionStatus(id)); const resolvedStatuses = await Promise.all(newStatusesFetchPromises); if (!isMountedRef.current) return; const newStatusesObject = resolvedStatuses.reduce((acc, statusData) => { if (statusData && statusData.session_id) { acc[statusData.session_id] = statusData; } return acc; }, {}); setSessionStatuses(newStatusesObject); } else { setSessionStatuses({}); } } catch (err) { console.error("[DashboardPage] Error en initialLoad:", err); } finally { if (isMountedRef.current) setIsLoading(false); } }, [currentUser, processInteractions, formatInteractionData]);
     
     useEffect(() => { const isMountedRef = { current: true }; if (currentUser && currentUser.id) initialLoad(isMountedRef); else setIsLoading(false); return () => { isMountedRef.current = false; }; }, [currentUser, initialLoad]);
     
@@ -79,9 +79,6 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
         }
     }, [filterType, selectedSessionId, sessionStatuses, navigate]);
     
-    // --- INICIO DE LA CORRECCIÓN: SEPARACIÓN DE INTERESES ---
-
-    // useEffect para manejar los cambios de ESTADO de las sesiones
     useEffect(() => {
         const isMountedRef = { current: true };
         if (!currentUser || !currentUser.id || !supabase) return;
@@ -119,14 +116,31 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
                 supabase.removeChannel(statusSubscription);
             }
         };
-    }, [currentUser]); // Solo depende del usuario para crear la suscripción una vez
+    }, [currentUser]);
 
-    // useEffect para manejar los MENSAJES nuevos
+    // --- INICIO DE LA CORRECCIÓN ---
     useEffect(() => {
         const isMountedRef = { current: true };
         if (!currentUser || !currentUser.id || !supabase) return;
 
-        const handleIncomingUpdate = (payload) => { /* ... */ };
+        const handleIncomingUpdate = (payload) => {
+            if (!isMountedRef.current) return;
+            const updatedData = payload.new;
+            if (!updatedData || !updatedData.session_id) return;
+            const newOrUpdatedInteraction = formatInteractionData(updatedData);
+
+            setGroupedInteractions(prevGroups => {
+                const allMessages = Object.values(prevGroups).flat();
+                const existingIndex = allMessages.findIndex(m => m.id === newOrUpdatedInteraction.id);
+                if (existingIndex > -1) {
+                    allMessages[existingIndex] = newOrUpdatedInteraction;
+                } else {
+                    allMessages.push(newOrUpdatedInteraction);
+                }
+                return processInteractions(allMessages);
+            });
+        };
+
         const historyChannelName = `agent-hist-${currentUser.id.slice(0, 8)}`;
         const historySubscription = supabase.channel(historyChannelName)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'n8n_chat_histories' }, async (payload) => {
@@ -156,8 +170,8 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
                 supabase.removeChannel(historySubscription);
             }
         };
-    }, [currentUser]); // Solo depende del usuario
-
+    // Se añaden las dependencias que el linter estaba pidiendo.
+    }, [currentUser, formatInteractionData, processInteractions]);
     // --- FIN DE LA CORRECCIÓN ---
 
     useEffect(() => {
