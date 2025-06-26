@@ -1,7 +1,5 @@
-// src/components/SessionList.js
 import React, { useMemo } from 'react';
 
-// --- Función para formatear el ID (sin cambios) ---
 const formatSessionId = (id) => {
     if (!id) return '';
     if (id.startsWith('whatsapp:')) {
@@ -10,11 +8,9 @@ const formatSessionId = (id) => {
     return id;
 };
 
-// Constantes y colores (sin cambios)
 const SESSION_STATUS = { BOT_ACTIVE: 'bot_active', AGENT_ACTIVE: 'agent_active', NEEDS_AGENT: 'needs_agent', BLOCKED: 'blocked', ARCHIVED: 'archived' };
-const colors = { bgMain: 'var(--wa-dark-bg-main, #111b21)', bgHover: 'var(--wa-dark-hover, #2a3942)', bgSelected: 'var(--wa-dark-selected, #2a3942)', bgWarning: 'var(--wa-dark-warning-bg, #5c4b00)', border: 'var(--wa-dark-border, #374045)', textPrimary: 'var(--wa-dark-text-primary, #e9edef)', textSec: 'var(--wa-dark-text-sec, #8696a0)', accent: 'var(--wa-dark-accent, #00a884)', alert: 'var(--wa-dark-alert, #f44336)', orange: 'var(--wa-dark-orange, #ff9800)', blue: 'var(--wa-dark-blue, #53bdeb)', grey: 'var(--wa-dark-grey, #8696a0)', btnYellow: 'var(--wa-dark-btn-yellow, #ffc107)' };
+const colors = { bgMain: 'var(--wa-dark-bg-main, #111b21)', bgHover: 'var(--wa-dark-hover, #2a3942)', bgSelected: 'var(--wa-dark-selected, #2a3942)', bgWarning: 'var(--wa-dark-warning-bg, #5c4b00)', border: 'var(--wa-dark-border, #374045)', textPrimary: 'var(--wa-dark-text-primary, #e9edef)', textSec: 'var(--wa-dark-text-sec, #8696a0)', accent: 'var(--wa-dark-accent, #00a884)', alert: 'var(--wa-dark-alert, #f44336)', orange: 'var(--wa-dark-orange, #ff9800)', blue: 'var(--wa-dark-blue, #53bdeb)', grey: 'var(--wa-dark-grey, #757575)', btnYellow: 'var(--wa-dark-btn-yellow, #ffc107)' };
 
-// ---- Iconos (sin cambios) ----
 const BotIconMini = () => <span className="BotIconMini" title="Chat con Bot"><svg viewBox="0 0 24 24" width="16px" height="16px" style={{ marginRight: '5px', flexShrink: 0, fill: colors.textSec }}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-2.5-8.5h5v1h-5zm-1.5 2.5h8V16h-8zM9 9c.83 0 1.5.67 1.5 1.5S9.83 12 9 12s-1.5-.67-1.5-1.5S8.17 9 9 9zm6 0c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5.67-1.5 1.5-1.5z"/></svg></span>;
 const AgentIconMini = () => <span className="AgentIconMini" title="Chat con Agente"><svg viewBox="0 0 24 24" width="16px" height="16px" style={{ marginRight: '5px', flexShrink: 0, fill: colors.blue }}><path d="M12 1.99C6.47 1.99 2 6.48 2 12s4.47 10 10 10h5v-2h-5c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8v1.43c0 .79-.71 1.57-1.5 1.57s-1.5-.78-1.5-1.57V12c0-2.21-1.79-4-4-4s-4 1.79-4 4 1.79 4 4 4c.78 0 1.45.36 2 .93V19h2.08L19.5 22l1.42-1.42L12 11.66V1.99zM16 15.5c-1.08 0-2.04.43-2.75 1.14L12 18l-1.25-1.36C9.04 15.93 8.08 15.5 7 15.5c-1.49 0-2.7 1.21-2.7 2.7s1.21 2.7 2.7 2.7c1.08 0 2.04-.43 2.75-1.14L12 18l1.25 1.36c.71.71 1.67 1.14 2.75 1.14 1.49 0 2.7-1.21 2.7-2.7s-1.21-2.7-2.7-2.7z"/></svg></span>;
 const AlertIconMini = () => <span className="AlertIconMini" title="Necesita Atención"><svg viewBox="0 0 24 24" width="16px" height="16px" style={{ marginRight: '5px', flexShrink: 0, fill: colors.orange }}><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg></span>;
@@ -25,8 +21,15 @@ const MoreOptionsIcon = ({ onClick }) => ( <svg onClick={onClick} viewBox="0 0 2
 const SearchIcon = () => ( <svg fill={colors.textSec} width="20px" height="20px" viewBox="0 0 24 24" style={{ position: 'absolute', left: '25px', top: '50%', transform: 'translateY(-50%)', zIndex: 1 }}> <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/> </svg> );
 
 const ContextMenu = React.memo(({ sessionId, sessionData, unreadCounts, onPinSession, onMarkAsUnread, onMarkAsRead, onArchiveSession, onUnarchiveSession, onBlockSession, onUnblockSession, onClose }) => {
-    // El código del Menú Contextual no cambia
-    const isPinned = sessionData?.is_pinned || false; const isArchived = sessionData?.status === SESSION_STATUS.ARCHIVED; const isBlocked = sessionData?.status === SESSION_STATUS.BLOCKED; const currentUnreadCount = unreadCounts && unreadCounts[sessionId] ? unreadCounts[sessionId] : 0; const isCurrentlyUnread = currentUnreadCount > 0; const handleAction = (actionFunction, actionName, e) => { if (e) e.stopPropagation(); if (typeof actionFunction === 'function') { actionFunction(sessionId); } else { console.error(`[ContextMenu] handleAction: actionFunction para ${actionName} NO es una función.`); } onClose(); }; const menuItemStyle = { padding: '10px 15px', cursor: 'pointer', fontSize: '0.9em' }; const menuItemHoverStyle = { backgroundColor: colors.bgHover }; return ( <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', right: '30px', top: '10px', backgroundColor: 'var(--wa-dark-bg-context-menu, #233138)', border: `1px solid ${colors.border}`, borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', zIndex: 1000, width: '200px', color: colors.textPrimary }}> <ul style={{ listStyle: 'none', margin: 0, padding: '5px 0' }}> {!isBlocked && ( <> {!isArchived && ( <li style={menuItemStyle} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = menuItemHoverStyle.backgroundColor} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'} onClick={(e) => handleAction(onPinSession, "onPinSession", e)}> {isPinned ? "Desfijar Chat" : "Fijar Chat"} </li> )} <li style={menuItemStyle} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = menuItemHoverStyle.backgroundColor} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'} onClick={(e) => handleAction(isCurrentlyUnread ? onMarkAsRead : onMarkAsUnread, isCurrentlyUnread ? "onMarkAsRead" : "onMarkAsUnread", e)}> {isCurrentlyUnread ? "Marcar como leído" : "Marcar como no leído"} </li> <li style={menuItemStyle} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = menuItemHoverStyle.backgroundColor} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'} onClick={(e) => handleAction(isArchived ? onUnarchiveSession : onArchiveSession, isArchived ? "onUnarchiveSession" : "onArchiveSession", e)}> {isArchived ? "Desarchivar Chat" : "Archivar Chat"} </li> <hr style={{ margin: '5px 0', borderColor: colors.border, opacity: 0.5 }} /> <li style={{ ...menuItemStyle, color: colors.alert }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = menuItemHoverStyle.backgroundColor} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'} onClick={(e) => handleAction(onBlockSession, "onBlockSession", e)}> Bloquear Usuario </li> </> )} {isBlocked && ( <> {isArchived && ( <li style={menuItemStyle} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = menuItemHoverStyle.backgroundColor} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'} onClick={(e) => handleAction(onUnarchiveSession, "onUnarchiveSession", e)}> Desarchivar Chat </li> )} <li style={{ ...menuItemStyle, color: colors.blue }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = menuItemHoverStyle.backgroundColor} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'} onClick={(e) => handleAction(onUnblockSession, "onUnblockSession", e)}> Desbloquear Usuario </li> </> )} </ul> </div> );
+    const isPinned = sessionData?.is_pinned || false; 
+    const isArchived = sessionData?.status === SESSION_STATUS.ARCHIVED; 
+    const isBlocked = sessionData?.status === SESSION_STATUS.BLOCKED; 
+    const currentUnreadCount = unreadCounts && unreadCounts[sessionId] ? unreadCounts[sessionId] : 0; 
+    const isCurrentlyUnread = currentUnreadCount > 0; 
+    const handleAction = (actionFunction, actionName, e) => { if (e) e.stopPropagation(); if (typeof actionFunction === 'function') { actionFunction(sessionId); } else { console.error(`[ContextMenu] handleAction: actionFunction para ${actionName} NO es una función.`); } onClose(); }; 
+    const menuItemStyle = { padding: '10px 15px', cursor: 'pointer', fontSize: '0.9em' }; 
+    const menuItemHoverStyle = { backgroundColor: colors.bgHover }; 
+    return ( <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', right: '30px', top: '10px', backgroundColor: 'var(--wa-dark-bg-context-menu, #233138)', border: `1px solid ${colors.border}`, borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', zIndex: 1000, width: '200px', color: colors.textPrimary }}> <ul style={{ listStyle: 'none', margin: 0, padding: '5px 0' }}> {!isBlocked && ( <> {!isArchived && ( <li style={menuItemStyle} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = menuItemHoverStyle.backgroundColor} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'} onClick={(e) => handleAction(onPinSession, "onPinSession", e)}> {isPinned ? "Desfijar Chat" : "Fijar Chat"} </li> )} <li style={menuItemStyle} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = menuItemHoverStyle.backgroundColor} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'} onClick={(e) => handleAction(isCurrentlyUnread ? onMarkAsRead : onMarkAsUnread, isCurrentlyUnread ? "onMarkAsRead" : "onMarkAsUnread", e)}> {isCurrentlyUnread ? "Marcar como leído" : "Marcar como no leído"} </li> <li style={menuItemStyle} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = menuItemHoverStyle.backgroundColor} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'} onClick={(e) => handleAction(isArchived ? onUnarchiveSession : onArchiveSession, isArchived ? "onUnarchiveSession" : "onArchiveSession", e)}> {isArchived ? "Desarchivar Chat" : "Archivar Chat"} </li> <hr style={{ margin: '5px 0', borderColor: colors.border, opacity: 0.5 }} /> <li style={{ ...menuItemStyle, color: colors.alert }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = menuItemHoverStyle.backgroundColor} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'} onClick={(e) => handleAction(onBlockSession, "onBlockSession", e)}> Bloquear Usuario </li> </> )} {isBlocked && ( <> {isArchived && ( <li style={menuItemStyle} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = menuItemHoverStyle.backgroundColor} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'} onClick={(e) => handleAction(onUnarchiveSession, "onUnarchiveSession", e)}> Desarchivar Chat </li> )} <li style={{ ...menuItemStyle, color: colors.blue }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = menuItemHoverStyle.backgroundColor} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'} onClick={(e) => handleAction(onUnblockSession, "onUnblockSession", e)}> Desbloquear Usuario </li> </> )} </ul> </div> );
 });
 
 const UnreadBadge = React.memo(() => (
@@ -42,8 +45,8 @@ function SessionList({
     chatViewFilter,
     searchTerm,
     onSearchChange,
-    contacts, // 2. RECIBIMOS LA LISTA DE CONTACTOS
-    isLoading // Prop para mostrar indicador de carga
+    contacts, 
+    isLoading
 }) {
     const orderedSessionIds = useMemo(() => {
         return Object.keys(groupedInteractions)
@@ -87,7 +90,7 @@ function SessionList({
                 }
                 return lastMessageTimeB - lastMessageTimeA;
             });
-    }, [groupedInteractions, sessionStatuses, chatViewFilter, unreadCounts, searchTerm, contacts]); // Añadimos contacts a las dependencias
+    }, [groupedInteractions, sessionStatuses, chatViewFilter, unreadCounts, searchTerm, contacts]);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: colors.bgSec, borderRight: `1px solid ${colors.border}` }}>
@@ -107,9 +110,33 @@ function SessionList({
             ) : (
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0, height: '100%', overflowY: 'auto' }}>
                     {orderedSessionIds.map(sessionId => {
-                       const messages = groupedInteractions[sessionId] || []; const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null; const sessionData = sessionStatuses[sessionId] || { status: SESSION_STATUS.BOT_ACTIVE, is_pinned: false }; const status = sessionData.status; const isSelected = sessionId === selectedSessionId; const unreadCount = unreadCounts[sessionId] || 0; const isBlocked = status === SESSION_STATUS.BLOCKED; const isPinned = sessionData.is_pinned; const showUnreadIndicator = unreadCount > 0 && !isBlocked; let itemStyle = { padding: '12px 15px', borderBottom: `1px solid ${colors.border}`, cursor: 'pointer', backgroundColor: isSelected ? colors.bgSelected : colors.bgMain, transition: 'background-color 0.1s ease-out', opacity: (isBlocked && chatViewFilter !== 'blocked') ? 0.6 : 1, display: 'flex', flexDirection: 'column', position: 'relative' }; if (status === SESSION_STATUS.NEEDS_AGENT && !isSelected) { itemStyle.backgroundColor = colors.bgWarning; itemStyle.borderLeft = `3px solid ${colors.btnYellow}`; } let statusIndicator = null; if (isBlocked) { statusIndicator = <BlockIconMini />; } else if (status === SESSION_STATUS.NEEDS_AGENT) { statusIndicator = <AlertIconMini />; } else if (status === SESSION_STATUS.AGENT_ACTIVE) { statusIndicator = <AgentIconMini />; } else if (status === SESSION_STATUS.ARCHIVED) { statusIndicator = <ArchiveIconMini />; } else { statusIndicator = <BotIconMini />; } const handleMouseEnter = (e) => { if (!isSelected) e.currentTarget.style.backgroundColor = colors.bgHover; }; const handleMouseLeave = (e) => { if (!isSelected) { e.currentTarget.style.backgroundColor = (status === SESSION_STATUS.NEEDS_AGENT) ? colors.bgWarning : colors.bgMain; } }; const lastMessageContent = lastMessage ? ( lastMessage.isAgentMessage ? `Agente: ${lastMessage.content}` : lastMessage.type === 'human' ? `Usuario: ${lastMessage.content}` : `Bot: ${lastMessage.content}` ) : 'Sin mensajes aún.'; const lastMessageTimeFormatted = lastMessage ? new Date(lastMessage.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                        const messages = groupedInteractions[sessionId] || []; 
+                        const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null; 
+                        const sessionData = sessionStatuses[sessionId] || { status: SESSION_STATUS.BOT_ACTIVE, is_pinned: false }; 
+                        const status = sessionData.status; 
+                        const isSelected = sessionId === selectedSessionId; 
+                        const unreadCount = unreadCounts[sessionId] || 0; 
+                        const isBlocked = status === SESSION_STATUS.BLOCKED; 
+                        const isPinned = sessionData.is_pinned; 
                         
-                        // --- 3. MOSTRAR EL NOMBRE DEL CONTACTO O EL NÚMERO ---
+                        const showUnreadIndicator = unreadCount > 0 && !isBlocked;
+
+                        let itemStyle = { padding: '12px 15px', borderBottom: `1px solid ${colors.border}`, cursor: 'pointer', backgroundColor: isSelected ? colors.bgSelected : colors.bgMain, transition: 'background-color 0.1s ease-out', opacity: (isBlocked && chatViewFilter !== 'blocked') ? 0.6 : 1, display: 'flex', flexDirection: 'column', position: 'relative' }; 
+                        if (status === SESSION_STATUS.NEEDS_AGENT && !isSelected) { 
+                            itemStyle.backgroundColor = colors.bgWarning; 
+                            itemStyle.borderLeft = `3px solid ${colors.btnYellow}`; 
+                        } 
+                        let statusIndicator = null; 
+                        if (isBlocked) { statusIndicator = <BlockIconMini />; } 
+                        else if (status === SESSION_STATUS.NEEDS_AGENT) { statusIndicator = <AlertIconMini />; } 
+                        else if (status === SESSION_STATUS.AGENT_ACTIVE) { statusIndicator = <AgentIconMini />; } 
+                        else if (status === SESSION_STATUS.ARCHIVED) { statusIndicator = <ArchiveIconMini />; } 
+                        else { statusIndicator = <BotIconMini />; } 
+                        const handleMouseEnter = (e) => { if (!isSelected) e.currentTarget.style.backgroundColor = colors.bgHover; }; 
+                        const handleMouseLeave = (e) => { if (!isSelected) { e.currentTarget.style.backgroundColor = (status === SESSION_STATUS.NEEDS_AGENT) ? colors.bgWarning : colors.bgMain; } }; 
+                        const lastMessageContent = lastMessage ? ( lastMessage.isAgentMessage ? `Agente: ${lastMessage.content}` : lastMessage.type === 'human' ? `Usuario: ${lastMessage.content}` : `Bot: ${lastMessage.content}` ) : 'Sin mensajes aún.'; 
+                        const lastMessageTimeFormatted = lastMessage ? new Date(lastMessage.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                        
                         const displayName = contacts[sessionId] || formatSessionId(sessionId);
                         
                         return (
@@ -138,7 +165,7 @@ function SessionList({
                                 </div>
                                 
                                 {openContextMenuForSessionId === sessionId && (
-                                    <ContextMenu
+                                    <ContextMenu 
                                         sessionId={sessionId} sessionData={sessionData} unreadCounts={unreadCounts}
                                         onPinSession={onPinSession}
                                         onMarkAsUnread={onMarkAsUnread}

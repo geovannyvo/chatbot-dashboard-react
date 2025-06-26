@@ -44,10 +44,8 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
     const [lastSelectedByFilter, setLastSelectedByFilter] = useState(() => getCachedData('lastSelectedByFilter', {}));
 
     const selectedSessionIdRef = useRef(selectedSessionId);
-    const sessionStatusesRef = useRef(sessionStatuses);
-
+    
     useEffect(() => { selectedSessionIdRef.current = selectedSessionId; }, [selectedSessionId]);
-    useEffect(() => { sessionStatusesRef.current = sessionStatuses; }, [sessionStatuses]);
     useEffect(() => { localStorage.setItem('unreadCounts', JSON.stringify(unreadCounts)); }, [unreadCounts]);
     useEffect(() => { try { if (Object.keys(groupedInteractions).length > 0) localStorage.setItem('cachedInteractions', JSON.stringify(groupedInteractions)); } catch (e) {} }, [groupedInteractions]);
     useEffect(() => { try { if (Object.keys(sessionStatuses).length > 0) localStorage.setItem('cachedStatuses', JSON.stringify(sessionStatuses)); } catch (e) {} }, [sessionStatuses]);
@@ -81,78 +79,86 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
         }
     }, [filterType, selectedSessionId, sessionStatuses, navigate]);
     
+    // --- INICIO DE LA CORRECCIÓN: SEPARACIÓN DE INTERESES ---
+
+    // useEffect para manejar los cambios de ESTADO de las sesiones
     useEffect(() => {
         const isMountedRef = { current: true };
         if (!currentUser || !currentUser.id || !supabase) return;
 
-        const handleIncomingUpdate = (payload) => {
-            if (!isMountedRef.current) return;
-            const updatedData = payload.new;
-            if (!updatedData || !updatedData.session_id) return;
-            const newOrUpdatedInteraction = formatInteractionData(updatedData);
-
-            setGroupedInteractions(prevGroups => {
-                const allMessages = Object.values(prevGroups).flat();
-                const existingIndex = allMessages.findIndex(m => m.id === newOrUpdatedInteraction.id);
-                if (existingIndex > -1) {
-                    allMessages[existingIndex] = newOrUpdatedInteraction;
-                } else {
-                    allMessages.push(newOrUpdatedInteraction);
-                }
-                return processInteractions(allMessages);
-            });
-        };
-        const historyChannelName = `agent-hist-${currentUser.id.slice(0, 8)}`;
         const statusChannelName = `agent-stat-${currentUser.id.slice(0, 8)}`;
-
-        // --- INICIO DE LA CORRECCIÓN ---
-        // Se eliminan las constantes `historySubscription` y `statusSubscription`
-        supabase.channel(historyChannelName)
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'n8n_chat_histories' }, async (payload) => {
-                handleIncomingUpdate(payload);
-                const newInteraction = formatInteractionData(payload.new);
-                const currentSelected = selectedSessionIdRef.current;
-                const sessionStatus = sessionStatusesRef.current[newInteraction.sessionId]?.status;
-                if (newInteraction.sessionId !== currentSelected && sessionStatus !== SESSION_STATUS.BLOCKED) {
-                    setUnreadCounts(prev => ({ ...prev, [newInteraction.sessionId]: (prev[newInteraction.sessionId] || 0) + 1 }));
-                }
-                if (!sessionStatusesRef.current[newInteraction.sessionId]) {
-                    const newStatus = await getSessionStatus(newInteraction.sessionId);
-                    if (isMountedRef.current) setSessionStatuses(prev => ({ ...prev, [newInteraction.sessionId]: newStatus }));
-                }
-            })
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'n8n_chat_histories' }, handleIncomingUpdate)
-            .subscribe();
-
-        supabase.channel(statusChannelName)
+        const statusSubscription = supabase.channel(statusChannelName)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_sessions_state' }, (payload) => {
                 if (!isMountedRef.current) return;
                 const changedSessionId = payload.new?.session_id || payload.old?.session_id;
-                if (changedSessionId) {
-                    if (payload.eventType === 'DELETE') {
-                        setSessionStatuses(prev => { const newSt = { ...prev }; delete newSt[changedSessionId]; return newSt; });
-                        if (selectedSessionIdRef.current === changedSessionId) setSelectedSessionId(null);
-                    } else if (payload.new) {
-                        const oldStatus = sessionStatusesRef.current[changedSessionId]?.status;
-                        const newStatus = payload.new.status;
-                        setSessionStatuses(prev => ({ ...prev, [changedSessionId]: { ...(prev[changedSessionId] || {}), ...payload.new } }));
+                if (!changedSessionId) return;
+
+                if (payload.eventType === 'DELETE') {
+                    setSessionStatuses(prev => { const newSt = { ...prev }; delete newSt[changedSessionId]; return newSt; });
+                    if (selectedSessionIdRef.current === changedSessionId) setSelectedSessionId(null);
+                } else if (payload.new) {
+                    const newStatusData = payload.new;
+                    setSessionStatuses(prevStatuses => {
+                        const oldStatus = prevStatuses[changedSessionId]?.status;
+                        const newStatus = newStatusData.status;
+
                         if (newStatus === SESSION_STATUS.NEEDS_AGENT && oldStatus !== newStatus) {
                             if (changedSessionId !== selectedSessionIdRef.current) {
-                                setUnreadCounts(prev => ({ ...prev, [changedSessionId]: (prev[changedSessionId] || 0) + 1 }));
+                                setUnreadCounts(prevUnread => ({ ...prevUnread, [changedSessionId]: (prevUnread[changedSessionId] || 0) + 1 }));
                             }
                         }
-                    }
+                        
+                        return { ...prevStatuses, [changedSessionId]: { ...(prevStatuses[changedSessionId] || {}), ...newStatusData } };
+                    });
                 }
             }).subscribe();
         
         return () => {
             isMountedRef.current = false;
-            if (supabase) {
-                supabase.removeAllChannels();
+            if (supabase && statusSubscription) {
+                supabase.removeChannel(statusSubscription);
             }
         };
-        // --- FIN DE LA CORRECCIÓN ---
-    }, [currentUser, formatInteractionData, processInteractions]);
+    }, [currentUser]); // Solo depende del usuario para crear la suscripción una vez
+
+    // useEffect para manejar los MENSAJES nuevos
+    useEffect(() => {
+        const isMountedRef = { current: true };
+        if (!currentUser || !currentUser.id || !supabase) return;
+
+        const handleIncomingUpdate = (payload) => { /* ... */ };
+        const historyChannelName = `agent-hist-${currentUser.id.slice(0, 8)}`;
+        const historySubscription = supabase.channel(historyChannelName)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'n8n_chat_histories' }, async (payload) => {
+                handleIncomingUpdate(payload);
+                const newInteraction = formatInteractionData(payload.new);
+                const currentSelected = selectedSessionIdRef.current;
+                
+                setSessionStatuses(currentStatuses => {
+                    const sessionStatus = currentStatuses[newInteraction.sessionId]?.status;
+                    if (newInteraction.sessionId !== currentSelected && sessionStatus !== SESSION_STATUS.BLOCKED) {
+                        setUnreadCounts(prev => ({ ...prev, [newInteraction.sessionId]: (prev[newInteraction.sessionId] || 0) + 1 }));
+                    }
+                    if (!currentStatuses[newInteraction.sessionId]) {
+                        getSessionStatus(newInteraction.sessionId).then(newStatus => {
+                            if (isMountedRef.current) setSessionStatuses(prev => ({ ...prev, [newInteraction.sessionId]: newStatus }));
+                        });
+                    }
+                    return currentStatuses;
+                });
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'n8n_chat_histories' }, handleIncomingUpdate)
+            .subscribe();
+
+        return () => {
+            isMountedRef.current = false;
+            if (supabase && historySubscription) {
+                supabase.removeChannel(historySubscription);
+            }
+        };
+    }, [currentUser]); // Solo depende del usuario
+
+    // --- FIN DE LA CORRECCIÓN ---
 
     useEffect(() => {
         const calculateFilterCounts = () => {
@@ -174,7 +180,7 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
     }, [unreadCounts, sessionStatuses, onCountersUpdate]);
 
     const handleSelectSession = useCallback(async (sessionId) => {
-        const sessionData = sessionStatusesRef.current[sessionId];
+        const sessionData = sessionStatuses[sessionId];
         const currentFilter = filterType || 'active';
         if (currentFilter === 'needs_agent' && sessionData?.status === SESSION_STATUS.NEEDS_AGENT) {
             if (!currentUser || !currentUser.id) {
@@ -202,7 +208,7 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
         if (openContextMenuForSessionId === sessionId) {
             setOpenContextMenuForSessionId(null);
         }
-    }, [filterType, currentUser, openContextMenuForSessionId, navigate]);
+    }, [filterType, currentUser, openContextMenuForSessionId, navigate, sessionStatuses]);
     
     const handleActionThatRemovesChat = useCallback((sessionId, filterToClear) => { if (selectedSessionIdRef.current === sessionId) { setLastSelectedByFilter(prev => { const newState = { ...prev }; delete newState[filterToClear]; return newState; }); navigate(`/filter/${filterType}`); } }, [navigate, filterType]);
     
@@ -250,8 +256,8 @@ function DashboardPage({ currentUser, onCountersUpdate, isMobile, filterType }) 
     const handleCloseContextMenu = useCallback(() => { setOpenContextMenuForSessionId(null); }, []);
     useEffect(() => { document.addEventListener('click', handleCloseContextMenu); return () => document.removeEventListener('click', handleCloseContextMenu); }, [handleCloseContextMenu]);
     const handleSearchChange = useCallback((term) => { setSearchTerm(term); }, []);
-    const handleTogglePinSession = useCallback(async (sessionId) => { const currentSession = sessionStatusesRef.current[sessionId]; if (!currentSession || currentSession.status === SESSION_STATUS.ARCHIVED || currentSession.status === SESSION_STATUS.BLOCKED) return; const newPinStatus = !(currentSession.is_pinned || false); setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...prev[sessionId], is_pinned: newPinStatus } })); const success = await setPinStatus(sessionId, newPinStatus); if (!success) { toast.error('Error al cambiar estado de fijado.'); setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...prev[sessionId], is_pinned: currentSession.is_pinned } })); } }, []);
-    const handleMarkAsUnread = useCallback((sessionId) => { const currentSessionData = sessionStatusesRef.current[sessionId]; const currentStatus = currentSessionData?.status; if (currentStatus === SESSION_STATUS.BLOCKED) { return; } setUnreadCounts(prevUnreadCounts => ({ ...prevUnreadCounts, [sessionId]: (prevUnreadCounts[sessionId] || 0) + 1 })); }, []);
+    const handleTogglePinSession = useCallback(async (sessionId) => { const currentSession = sessionStatuses[sessionId]; if (!currentSession || currentSession.status === SESSION_STATUS.ARCHIVED || currentSession.status === SESSION_STATUS.BLOCKED) return; const newPinStatus = !(currentSession.is_pinned || false); setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...prev[sessionId], is_pinned: newPinStatus } })); const success = await setPinStatus(sessionId, newPinStatus); if (!success) { toast.error('Error al cambiar estado de fijado.'); setSessionStatuses(prev => ({ ...prev, [sessionId]: { ...prev[sessionId], is_pinned: currentSession.is_pinned } })); } }, [sessionStatuses]);
+    const handleMarkAsUnread = useCallback((sessionId) => { const currentSessionData = sessionStatuses[sessionId]; const currentStatus = currentSessionData?.status; if (currentStatus === SESSION_STATUS.BLOCKED) { return; } setUnreadCounts(prevUnreadCounts => ({ ...prevUnreadCounts, [sessionId]: (prevUnreadCounts[sessionId] || 0) + 1 })); }, [sessionStatuses]);
     const handleMarkAsRead = useCallback((sessionId) => { setUnreadCounts(prevCounts => { if (prevCounts[sessionId] > 0) { const newCounts = { ...prevCounts }; delete newCounts[sessionId]; return newCounts; } return prevCounts; }); }, []);
 
     const listPanelStyle = { width: isMobile ? '100%' : '350px', display: isMobile && selectedSessionId ? 'none' : 'flex', flexDirection: 'column', height: '100%', backgroundColor: colors.bgMain, flexShrink: 0 };

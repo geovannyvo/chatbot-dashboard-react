@@ -18,8 +18,6 @@ const BlockedIcon = () => <svg viewBox="0 0 24 24" width="24" height="24" fill="
 const LogoutIcon = () => <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>;
 function useWindowSize() { const [size, setSize] = useState([window.innerWidth, window.innerHeight]); useEffect(() => { const handleResize = () => { setSize([window.innerWidth, window.innerHeight]); }; window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize); }, []); return { width: size[0], height: size[1] }; }
 
-// --- INICIO DE LA MODIFICACIÓN ---
-// PASO 3: Actualizar la Interfaz de Usuario (IconSidebar)
 function IconSidebar({ currentFilter, onChangeFilter, onLogout, filterCounts, isMobile }) {
     const baseIconButtonStle = { backgroundColor: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', position: 'relative', transition: 'color 0.2s, transform 0.2s' };
     const desktopStyle = { width: '80px', backgroundColor: 'var(--wa-dark-bg-main)', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '20px', borderRight: '1px solid var(--wa-dark-border)', flexShrink: 0 };
@@ -47,7 +45,6 @@ function IconSidebar({ currentFilter, onChangeFilter, onLogout, filterCounts, is
 
     const logoutStyle = isMobile ? { ...finalButtonStyle, color: 'var(--wa-dark-text-sec)' } : { ...finalButtonStyle, marginTop: 'auto', marginBottom: '20px' };
 
-    // Componente wrapper para el ícono y su contador
     const IconWrapper = ({ children, count }) => (
         <div style={{ position: 'relative', display: 'inline-block' }}>
             {children}
@@ -92,10 +89,8 @@ function DashboardLayout({ currentUser }) {
     const { filterType = 'active' } = useParams();
     const navigate = useNavigate();
 
-    // PASO 1: Crear Estado para los Contadores en el componente padre común.
     const [unreadFilterCounts, setUnreadFilterCounts] = useState({ active: 0, needs_agent: 0, archived: 0, blocked: 0 });
 
-    // PASO 1: Crear una Función de Callback para que el hijo actualice el estado del padre.
     const handleCountersUpdate = useCallback((counts) => {
         setUnreadFilterCounts(currentCounts => {
             if (JSON.stringify(currentCounts) !== JSON.stringify(counts)) {
@@ -128,14 +123,14 @@ function DashboardLayout({ currentUser }) {
                     currentFilter={filterType}
                     onChangeFilter={handleFilterChange}
                     onLogout={handleLogout}
-                    filterCounts={unreadFilterCounts} // PASO 1: Pasa el estado al sidebar
+                    filterCounts={unreadFilterCounts}
                     isMobile={isMobile}
                 />
             )}
             <main style={contentStyle}>
                 <DashboardPage
                     currentUser={currentUser}
-                    onCountersUpdate={handleCountersUpdate} // PASO 1: Pasa la función de callback al dashboard
+                    onCountersUpdate={handleCountersUpdate}
                     isMobile={isMobile}
                     filterType={filterType}
                 />
@@ -145,14 +140,26 @@ function DashboardLayout({ currentUser }) {
                     currentFilter={filterType}
                     onChangeFilter={handleFilterChange}
                     onLogout={handleLogout}
-                    filterCounts={unreadFilterCounts} // PASO 1: Pasa el estado al sidebar (móvil)
+                    filterCounts={unreadFilterCounts}
                     isMobile={isMobile}
                 />
             )}
         </div>
     );
 }
-// --- FIN DE LA MODIFICACIÓN ---
+
+// --- PWA ---
+// Estilo para el botón de instalación (puedes moverlo a tu App.css si prefieres)
+const installButtonStyle = {
+  backgroundColor: 'var(--wa-dark-accent, #00a884)',
+  color: 'white',
+  padding: '10px 20px',
+  border: 'none',
+  borderRadius: '5px',
+  cursor: 'pointer',
+  margin: '10px',
+  fontWeight: 'bold'
+};
 
 function App() {
     const [session, setSession] = useState(null);
@@ -163,6 +170,50 @@ function App() {
         } catch (e) { return null; }
     });
     const [isLoadingSession, setIsLoadingSession] = useState(true);
+
+    // --- PWA ---
+    const [installPrompt, setInstallPrompt] = useState(null);
+
+    useEffect(() => {
+        const handleBeforeInstallPrompt = (e) => {
+            // Previene que el navegador muestre la mini-infobar por defecto
+            e.preventDefault();
+            // Guarda el evento para que pueda ser disparado más tarde.
+            setInstallPrompt(e);
+            console.log("Evento 'beforeinstallprompt' capturado y almacenado.");
+        };
+
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+        // Función de limpieza para remover el listener
+        return () => {
+            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        };
+    }, []);
+
+    const handleInstallClick = async () => {
+        // Si no hay un evento guardado, no hacer nada
+        if (!installPrompt) {
+            console.log("No hay solicitud de instalación pendiente.");
+            return;
+        }
+
+        // Muestra el diálogo de instalación
+        installPrompt.prompt();
+
+        // Espera a que el usuario responda al diálogo
+        const { outcome } = await installPrompt.userChoice;
+        if (outcome === 'accepted') {
+            console.log('El usuario aceptó la instalación de la PWA.');
+        } else {
+            console.log('El usuario canceló la instalación de la PWA.');
+        }
+
+        // El evento de instalación solo se puede usar una vez.
+        // Después del primer uso, se debe descartar.
+        setInstallPrompt(null);
+    };
+    // --- PWA ---
 
     const syncUserProfile = useCallback(async () => {
         try {
@@ -248,6 +299,15 @@ function App() {
     return (
         <Router>
             <div className="App" style={{backgroundColor: 'var(--wa-dark-bg-main)', minHeight: '100vh'}}>
+                {/* --- PWA --- Renderiza el botón de instalación si el evento ha sido capturado */}
+                {installPrompt && (
+                  <div style={{ textAlign: 'center', padding: '10px', backgroundColor: 'var(--wa-dark-bg-sec)' }}>
+                    <button style={installButtonStyle} onClick={handleInstallClick}>
+                      Instalar Aplicación
+                    </button>
+                  </div>
+                )}
+                {/* --- PWA --- */}
                 <Routes>
                     <Route path="/login" element={<LoginRoute />} />
                     <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -270,4 +330,3 @@ function App() {
 }
 
 export default App;
-
